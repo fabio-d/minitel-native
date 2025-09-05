@@ -84,7 +84,8 @@ corresponding adapter board:
 
 Once you have identified what adapter board to use, get a
 [Raspberry Pico 2 or Pico 2 W](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
-(**not** Pico 1).
+(**not** Pico 1) and flash it as described in the
+[`firmware`](firmware/README.md) subdirectory.
 
 Finally, insert the Pico in the adapter board and the adapter board in the
 Minitel's logic board, as shown in the adapter-specific instructions.
