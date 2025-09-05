@@ -1,0 +1,16 @@
+#ifndef LIB_BOARD_NFZ330_INCLUDE_BOARD_DEFINITIONS_H
+#define LIB_BOARD_NFZ330_INCLUDE_BOARD_DEFINITIONS_H
+
+#include <stdint.h>
+
+#define XTAL_HZ 11059200
+
+#define VIDEO_EF9345
+#define VIDEO_MCU_INTERFACE_BASE_ADDRESS 0xdf20
+#define VIDEO_TGS_BOARD_EXTRAS VIDEO_TGS_CSYNC_OUT_NP
+#define VIDEO_PAT_BOARD_EXTRAS 0
+
+#define KEYBOARD_ROWS 9
+uint8_t board_read_keyboard(uint8_t row);
+
+#endif

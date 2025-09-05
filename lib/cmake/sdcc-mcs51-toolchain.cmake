@@ -1,0 +1,6 @@
+set(CMAKE_SYSTEM_NAME Generic)
+if(NOT CMAKE_C_COMPILER)
+  set(CMAKE_C_COMPILER sdcc)
+  set(CMAKE_C_FLAGS_INIT "-mmcs51 --std-sdcc2x")
+endif()
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
