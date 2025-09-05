@@ -1,0 +1,5 @@
+/board_*/*-backups/
+/board_*/*.kicad_pcb.lck
+/board_*/*.kicad_prl
+/board_*/*.kicad_sch.lck
+/board_*/fp-info-cache
