@@ -31,6 +31,10 @@ static const PIO pio = pio0;
 static constexpr uint sm_a = 0;
 static constexpr uint sm_b = 1;
 
+// Doorbell resource, to make core1 jump to the given address.
+static constexpr uint db_restart_core1 = 0;
+static std::atomic<uintptr_t> db_restart_core1_target_address;
+
 // ROM, stored as (pin-mapped address) -> (PIO instructions for sm_a and sm_b)
 // in a dedicated RAM region exclusively accessed by core1 while romemu is
 // running.
@@ -142,10 +146,79 @@ static void __scratch_x("romemu_worker_in_ram") core1_worker_task() {
   __builtin_unreachable();
 }
 
+[[gnu::noinline, gnu::noreturn]]
+static void __scratch_x("romemu_worker_in_ram") core1_idle_task() {
+  asm volatile(
+      "1:\n"
+      "wfe\n"
+      "b 1b\n");
+
+  __builtin_unreachable();
+}
+
+// This IRQ handler runs on core1 when db_restart_core1 is triggered by core0.
+//
+// Its goal is to make core1 stop the current task and switch to a different
+// one. In detail:
+// - It sets to ROM output value to zero to clear the effect of the interrupted
+//   task.
+// - It overwrites the program counter (PC) in the exception frame (that the CPU
+//   has just pushed on the stack before entering the IRQ handler) with the
+//   initial address of the new desired task.
+// - It clears the doorbell's flag.
+// - Finally, it returns. The CPU will pop the new PC from the exception frame
+//   on the stack and "return" to it, thus starting the new task.
+//
+// The layout of the exception frame is documented in "Arm Cortex-M33 Devices
+// Generic User Guide", section 2.3.7 "Exception entry and return".
+static void __scratch_x("romemu_worker_in_ram") core1_doorbell_irq() {
+  {
+    register uint32_t instr asm("r0") = pio_encode_set(pio_pins, 0);
+    register io_rw_32* instr_a_in asm("r1") = &pio->sm[sm_a].instr;
+    register io_rw_32* instr_b_in asm("r2") = &pio->sm[sm_b].instr;
+    asm volatile(
+        "str r0, [r1]\n"
+        "str r0, [r2]\n" ::"r"(instr),
+        "r"(instr_a_in), "r"(instr_b_in));
+  }
+
+  {
+    register io_rw_32* doorbell_in_clr asm("r0") = &sio_hw->doorbell_in_clr;
+    register uint32_t doorbell_in_clr_mask asm("r1") = 1 << db_restart_core1;
+    register uintptr_t target_addr asm("r2") =
+        db_restart_core1_target_address.load();
+
+    asm volatile(
+        "str r2, [sp, #0x18]\n"  // Set the new PC in the exception frame.
+        "str r1, [r0]\n"         // Clear the doorbell.
+        ::"r"(doorbell_in_clr),
+        "r"(doorbell_in_clr_mask), "r"(target_addr));
+  }
+}
+
+[[gnu::noinline, gnu::noreturn]]
+static void core1_entry_point() {
+  uint32_t irq = multicore_doorbell_irq_num(db_restart_core1);
+  irq_set_exclusive_handler(irq, core1_doorbell_irq);
+  irq_set_enabled(irq, true);
+
+  // Start the idle task.
+  core1_idle_task();
+}
+
+static void core1_restart(void (*new_task)(void)) {
+  db_restart_core1_target_address.store((uintptr_t)new_task);
+  multicore_doorbell_set_other_core(db_restart_core1);
+  while (multicore_doorbell_is_set_other_core(db_restart_core1)) {
+    tight_loop_contents();
+  }
+}
+
 void romemu_setup() {
-  // Claim the state machines that we will need.
+  // Claim the resources that we will need.
   pio_sm_claim(pio, sm_a);
   pio_sm_claim(pio, sm_b);
+  multicore_doorbell_claim(db_restart_core1, 0b10);
 
   // Load the program into the PIO engine.
   uint prog = pio_add_program(pio, &romemu_drive_data_outputs_program);
@@ -213,12 +286,14 @@ void romemu_setup() {
   for (uint i = 0; i < ROM_SIZE; i++) {
     romemu_write(i, 0xFF);
   }
+
+  // Start the worker function on core1, dedicated to this task.
+  multicore_launch_core1(core1_entry_point);
 }
 
-void romemu_start() {
-  // Start the worker function on core1, dedicated to this task.
-  multicore_launch_core1(core1_worker_task);
-}
+void romemu_start() { core1_restart(core1_worker_task); }
+
+void romemu_stop() { core1_restart(core1_idle_task); }
 
 void romemu_write(uint16_t address, uint8_t value) {
   // Trasform the logical address and value into the corresponding pin-mapped

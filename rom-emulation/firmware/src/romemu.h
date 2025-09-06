@@ -14,6 +14,9 @@ void romemu_setup();
 // romemu_write).
 void romemu_start();
 
+// Stops responding with real data and starts responding with 0x00 again.
+void romemu_stop();
+
 // Sets one byte of the emulated ROM.
 void romemu_write(uint16_t address, uint8_t value);
 
