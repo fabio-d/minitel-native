@@ -113,6 +113,11 @@ pin_map_address += generate_permutation_function(
     "uint16_t",
     [(busline.busid, busline.gpioid) for busline in buslines],
 )
+pin_map_address += generate_permutation_function(
+    "pin_map_address_inverse",
+    "uint16_t",
+    [(busline.gpioid, busline.busid) for busline in buslines],
+)
 
 with output_path.open("wt") as fp:
     print("#ifndef PIN_MAP_H", file=fp)

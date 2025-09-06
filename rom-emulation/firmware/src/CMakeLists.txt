@@ -3,10 +3,12 @@ add_executable(rom-emulator
   led.cpp
   main.cpp
   romemu.cpp
+  trace.cpp
 )
 
 pico_generate_pio_header(rom-emulator
   ${CMAKE_CURRENT_SOURCE_DIR}/romemu.pio
+  ${CMAKE_CURRENT_SOURCE_DIR}/trace.pio
 )
 
 pico_set_program_name(rom-emulator "Minitel ROM Emulator")

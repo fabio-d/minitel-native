@@ -59,3 +59,4 @@ It supports the following connection channels:
 
 Available commands:
 * `ping`: verifies that the Pico program is responding.
+* `trace`: prints the most recent ROM addresses fetched by the Minitel's CPU.

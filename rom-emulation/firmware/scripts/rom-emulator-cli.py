@@ -10,6 +10,7 @@ PACKET_MAGIC_BEGIN = 0x5CA7
 PACKET_MAGIC_END = 0x6DE1
 
 PACKET_TYPE_EMULATOR_PING = 0
+PACKET_TYPE_EMULATOR_TRACE = 1
 PACKET_TYPE_REPLY_XOR_MASK = 0x80
 
 
@@ -61,6 +62,19 @@ def do_ping(serial_port: serial.Serial, args: argparse.Namespace):
     print("Ping success!", file=sys.stderr)
 
 
+def do_trace(serial_port: serial.Serial, args: argparse.Namespace):
+    reply = transfer_packet(serial_port, PACKET_TYPE_EMULATOR_TRACE, b"")
+    if len(reply) == 0:
+        print(
+            "No ROM addresses were accessed during the sampling interval. "
+            "Is the CPU running?",
+            file=sys.stderr,
+        )
+    else:
+        for (addr,) in struct.iter_unpack("<H", reply):
+            print(f"{addr:#06x}", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="rom-emulator-cli",
@@ -88,6 +102,12 @@ def main():
         help="Verifies that the ROM emulator is responding.",
     )
     parser_ping.set_defaults(func=do_ping)
+
+    parser_trace = subparsers.add_parser(
+        name="trace",
+        help="Prints the most recently accessed ROM addresses.",
+    )
+    parser_trace.set_defaults(func=do_trace)
 
     args = parser.parse_args()
 

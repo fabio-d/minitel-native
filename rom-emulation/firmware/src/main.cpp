@@ -1,6 +1,7 @@
 #include <hardware/structs/busctrl.h>
 #include <pico/binary_info.h>
 #include <pico/stdlib.h>
+#include <pico/time.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -8,11 +9,15 @@
 #include "embedded-rom-array.h"
 #include "led.h"
 #include "romemu.h"
+#include "trace.h"
 
 bi_decl(bi_program_feature(MINITEL_MODEL_FEATURE));
 bi_decl(bi_program_feature(OPERATING_MODE_FEATURE));
 
 static_assert(sizeof(EMBEDDED_ROM) <= MAX_ROM_SIZE);
+
+constexpr uint TRACE_MAX_SAMPLES = 128;
+static uint16_t trace_buf[TRACE_MAX_SAMPLES];
 
 static CliProtocolDecoder stdio_decoder;
 static CliProtocolEncoder encoder;
@@ -25,6 +30,14 @@ static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
       encoder.begin(CLI_PACKET_TYPE_EMULATOR_PING ^
                     CLI_PACKET_TYPE_REPLY_XOR_MASK);
       encoder.push(packet_data, packet_length);  // echo back the same data
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_TRACE: {
+      uint num_samples = trace_collect(TRACE_MAX_SAMPLES,
+                                       make_timeout_time_us(150), trace_buf);
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_TRACE ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      encoder.push(trace_buf, num_samples * sizeof(uint16_t));
       return encoder.finalize();
     }
     default: {  // Unknown packet_type.
@@ -41,6 +54,10 @@ int main() {
   // Take over the duty of responding to PSEN requests from the SN74HCT541 to
   // ourselves.
   romemu_setup();
+
+  // Start recording requested ROM addresses. Since nothing is consuming them,
+  // the FIFO will overflow and stay that way until trace_collect is called.
+  trace_setup();
 
   // Initialize the status LED.
   led_setup();

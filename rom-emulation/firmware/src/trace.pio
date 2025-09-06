@@ -1,0 +1,48 @@
+.program trace_ale_then_psen
+; This program latches the address lines in register X while ALE is high and
+; sends it to the FIFO when PSEN goes low.
+;
+; It is assumed that GPIOs are rotated (via sm_config_set_in_pin_base) so that:
+; - PSEN is bit #1
+; - ALE is bit #0
+
+; Run at full speed.
+.clock_div 1
+
+; Altough we do not receive data from the FIFO, we still use the OSR to extract
+; subsequences of bits from GPIO readouts.
+.out 32 right
+
+; Use all the FIFO slots for sending data out.
+.fifo rx
+
+; This program uses the PSEN and ALE bits (combined) as a 2-bit absolute jump
+; address. This is the jump table:
+.origin 0
+jmp emit_latched   ; PSEN=0 ALE=0.
+jmp loop           ; PSEN=0 ALE=1 - this should never happen!
+jmp loop           ; PSEN=1 ALE=0 - not really interesting.
+jmp latch_current  ; PSEN=1 ALE=1.
+
+latch_current:
+  ; Latch the current GPIO readout.
+  out x, 30
+  jmp loop
+
+emit_latched:
+  ; Emit the address we had latched.
+  mov isr, x
+  push noblock
+
+  ; Wait for PSEN to be low again (i.e. the end of the current access cycle).
+  wait 1 pin 1
+  jmp loop
+
+PUBLIC entry_point:
+loop:
+  ; Store the current GPIO values in OSR.
+  mov osr, pins
+
+  ; The two rightmost bits are PSEN and ALE. Push them into PC (i.e. jump to
+  ; them as if they were an address).
+  out pc, 2

@@ -6,6 +6,7 @@
 #include <utility>
 
 constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_PING = 0;
+constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_TRACE = 1;
 constexpr uint8_t CLI_PACKET_TYPE_REPLY_XOR_MASK = 0x80;
 
 constexpr uint CLI_PACKET_MAX_DATA_LENGTH = 1024;
