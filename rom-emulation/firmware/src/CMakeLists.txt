@@ -1,4 +1,5 @@
 add_executable(rom-emulator
+  cli-protocol.cpp
   led.cpp
   main.cpp
   romemu.cpp

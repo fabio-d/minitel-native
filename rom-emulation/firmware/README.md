@@ -48,3 +48,14 @@ pressed, and a new virtual disk drive will appear to be connected. Copy
 `build/rom-emulator-embedded.uf2` into it. The disk drive will disconnect at the
 end of the process and the Pico's on-board LED will start to blink, indicating
 that the ROM emulation software is running.
+
+## Client protocol
+
+The [`scripts/rom-emulator-cli.py`](scripts/rom-emulator-cli.py) program can be
+used to interact with the firmware while it is running on the Pico.
+
+It supports the following connection channels:
+* The Pico's own USB serial port (usage: `rom-emulator-cli.py -s /dev/ttyACM0`).
+
+Available commands:
+* `ping`: verifies that the Pico program is responding.

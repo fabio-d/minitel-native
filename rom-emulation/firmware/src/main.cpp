@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "cli-protocol.h"
 #include "embedded-rom-array.h"
 #include "led.h"
 #include "romemu.h"
@@ -12,6 +13,25 @@ bi_decl(bi_program_feature(MINITEL_MODEL_FEATURE));
 bi_decl(bi_program_feature(OPERATING_MODE_FEATURE));
 
 static_assert(sizeof(EMBEDDED_ROM) <= MAX_ROM_SIZE);
+
+static CliProtocolDecoder stdio_decoder;
+static CliProtocolEncoder encoder;
+
+static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
+                                                      const void *packet_data,
+                                                      uint packet_length) {
+  switch (packet_type) {
+    case CLI_PACKET_TYPE_EMULATOR_PING: {
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_PING ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      encoder.push(packet_data, packet_length);  // echo back the same data
+      return encoder.finalize();
+    }
+    default: {  // Unknown packet_type.
+      return {0, 0};
+    }
+  }
+}
 
 int main() {
   // Give core1 (the CPU that will serve the ROM) priority access to the RAM,
@@ -47,10 +67,27 @@ int main() {
       led_set(led_on);
     }
 
-    // Just echo back what we receive, for now.
+    // Interpret bytes received over USB with the client protocol.
     uint32_t r = stdio_getchar_timeout_us(0);
     if (r != PICO_ERROR_TIMEOUT) {
-      printf("Received %02x from stdin!\n", r);
+      switch (stdio_decoder.push(r)) {
+        case CliProtocolDecoder::PushResult::Idle: {
+          break;
+        }
+        case CliProtocolDecoder::PushResult::Error: {
+          stdio_decoder.reset();
+          break;
+        }
+        case CliProtocolDecoder::PushResult::PacketAvailable: {
+          auto [reply_data, reply_length] = handle_packet(
+              stdio_decoder.get_packet_type(), stdio_decoder.get_packet_data(),
+              stdio_decoder.get_packet_length());
+          for (uint i = 0; i < reply_length; i++) {
+            stdio_putchar_raw(reply_data[i]);
+          }
+          break;
+        }
+      }
     }
   }
 }
