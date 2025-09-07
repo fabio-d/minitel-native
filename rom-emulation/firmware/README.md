@@ -5,7 +5,7 @@
 Download the Pico SDK (tested with version 2.2.0) and the other prerequisites:
 ```shell
 $ sudo apt install build-essential cmake gcc-arm-none-eabi \
-    libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3
+    libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3 sdcc
 
 # The SDK can be downloaded into any directory. The next commands assume that
 # it has been cloned into the home directory and, therefore, the resulting
@@ -19,11 +19,15 @@ Configure and build the project:
 # Run these commands in the "firmware" directory (same as this README.md file).
 $ mkdir build/
 $ cd build/
+
+# Omit -DEMBED_ROM_FILE=... if -DOPERATING_MODE=interactive.
 $ cmake .. \
     -DPICO_SDK_PATH=~/pico-sdk \
     -DPICO_BOARD=<pico2|pico2_w> \
     -DMINITEL_MODEL=<nfz330|nfz400|justrom:...> \
-    -DOPERATING_MODE=embedded -DEMBED_ROM_FILE=/path/to/rom.bin
+    -DOPERATING_MODE=<embedded|interactive> \
+    -DEMBED_ROM_FILE=/path/to/rom.bin
+
 $ make
 ```
 where:
@@ -39,15 +43,48 @@ where:
   * If set to `embedded`, `EMBED_ROM_FILE` should be set to path to the ROM file
     to be emulated. No other features, in addition to just serving the ROM, will
     be enabled.
-  * Other modes will be added in the future.
+  * If set to `interactive`, the Minitel shows an interactive menu on its
+    screen at power on. Using the Minitel's keyboard, it is then possible to
+    proceed to booting the actual ROM.
 
 ## Installation
+
+### If `OPERATING_MODE` is `embedded`
 
 Connect the Pico's USB port to the computer while keeping the `BOOTSEL` button
 pressed, and a new virtual disk drive will appear to be connected. Copy
 `build/rom-emulator-embedded.uf2` into it. The disk drive will disconnect at the
 end of the process and the Pico's on-board LED will start to blink, indicating
 that the ROM emulation software is running.
+
+### If `OPERATING_MODE` is `interactive`
+
+> [!WARNING]
+> In interactive mode, the Pico's internal flash will be partitioned (as opposed
+> to being unpartitioned, which is how most Pico programs normally run). If,
+> after installing this firmware, the Pico board needs to be later reused in
+> other projects, use the `flash_nuke.uf2` program (see
+> [official instructions](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html#resetting-flash-memory))
+> to fully revert this process and restore factory conditions.
+
+Connect the Pico's USB port to the computer while keeping the `BOOTSEL` button
+pressed, and a new virtual disk drive will appear to be connected. Copy
+`build/rom-emulator-full-install.uf2` into it. The disk drive will disconnect at
+the end of the process and the Pico's on-board LED will start to blink,
+indicating that the ROM emulation software is running.
+
+After installing `build/rom-emulator-full-install.uf2` once, storing/updating
+the ROM to be booted currently requires the `picotool` program (but this will
+change in the next commits):
+```shell
+# Power the board while BOOTSEL is pressed, then:
+$ picotool load -p 2 /path/to/rom.bin  # note: -p 2 selects the "DATA" partition
+```
+
+Similarly, after installing `build/rom-emulator-full-install.uf2`, subsequent
+firmware updates can be loaded without erasing the ROM in the data partition,
+by powering the board with BOOTSEL pressed and dragging
+`build/rom-emulator-update-only.uf2` into its virtual disk drive.
 
 ## Client protocol
 
@@ -57,6 +94,9 @@ used to interact with the firmware while it is running on the Pico.
 It supports the following connection channels:
 * The Pico's own USB serial port (usage: `rom-emulator-cli.py -s /dev/ttyACM0`).
 
-Available commands:
+Always available commands:
 * `ping`: verifies that the Pico program is responding.
 * `trace`: prints the most recent ROM addresses fetched by the Minitel's CPU.
+
+Only if `OPERATING_MODE` is `interactive`:
+* `boot`: equivalent to selecting the boot command in the interactive menu.

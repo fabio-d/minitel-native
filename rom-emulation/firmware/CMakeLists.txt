@@ -34,6 +34,10 @@ elseif(MINITEL_MODEL STREQUAL "nfz400")
 elseif(MINITEL_MODEL MATCHES "justrom:(.*)")
   set(MINITEL_MODEL justrom)
   set(PINOUT "${CMAKE_MATCH_1}")
+
+  if(NOT OPERATING_MODE STREQUAL "embedded")
+    message(FATAL_ERROR "Invalid -DMINITEL_MODEL=justrom:... requires -DOPERATING_MODE=embedded")
+  endif()
 else()
   message(FATAL_ERROR "Invalid -DMINITEL_MODEL=... value")
 endif()
@@ -43,12 +47,28 @@ message("Using pinout ${PINOUT}")
 # Select what features to support.
 set(OPERATING_MODE "" CACHE STRING "Extra features to be enabled")
 if(OPERATING_MODE STREQUAL "embedded")
+  set(ROM_EMULATOR_IS_INTERACTIVE 0)
+
   # Select the ROM to be embedded.
   set(EMBED_ROM_FILE "" CACHE FILEPATH "Path to the ROM to be emulated")
   if(NOT EMBED_ROM_FILE)
     message(FATAL_ERROR "Please set cmake ... -DEMBED_ROM_FILE=/path/to/rom.bin")
   endif()
   message("Embedding ROM binary at ${EMBED_ROM_FILE}")
+  set(EMBED_ROM_FILE_DEPENDS)
+elseif(OPERATING_MODE STREQUAL "interactive")
+  set(ROM_EMULATOR_IS_INTERACTIVE 1)
+
+  ExternalProject_Add(menu-rom
+    SOURCE_DIR ../menu
+    CMAKE_ARGS -DMINITEL_MODEL=${MINITEL_MODEL}
+    INSTALL_COMMAND ""
+    BUILD_ALWAYS TRUE
+  )
+
+  ExternalProject_Get_property(menu-rom BINARY_DIR)
+  set(EMBED_ROM_FILE "${BINARY_DIR}/menu-rom.bin")
+  set(EMBED_ROM_FILE_DEPENDS menu-rom)
 else()
   message(FATAL_ERROR "Invalid -DOPERATING_MODE=... value")
 endif()

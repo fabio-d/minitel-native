@@ -7,9 +7,12 @@
 
 constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_PING = 0;
 constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_TRACE = 1;
+constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_BOOT = 2;
 constexpr uint8_t CLI_PACKET_TYPE_REPLY_XOR_MASK = 0x80;
 
 constexpr uint CLI_PACKET_MAX_DATA_LENGTH = 1024;
+constexpr uint CLI_PACKET_MAX_ENCODED_LENGTH =
+    2 + 2 + 1 + CLI_PACKET_MAX_DATA_LENGTH + 2 + 2;
 
 class CliProtocolDecoder {
  public:

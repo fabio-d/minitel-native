@@ -1,0 +1,42 @@
+#include "partition.h"
+
+#include <boot/picobin.h>
+#include <pico/assert.h>
+#include <pico/bootrom.h>
+#include <string.h>
+
+static uint8_t workarea[4096];
+
+Partition::Partition() {
+  base_offset = 0;
+  size = 0;
+}
+
+bool Partition::open_with_family_id(uint32_t family_id) {
+  static_assert(sizeof(workarea) >= 3064,
+                "Minimum workarea size for get_uf2_target_partition");
+
+  resident_partition_t partition_info;
+  int rc = rom_get_uf2_target_partition(workarea, sizeof(workarea), family_id,
+                                        &partition_info);
+  if (rc < 0) {
+    return false;
+  }
+
+  uint32_t first_sector = (partition_info.permissions_and_location &
+                           PICOBIN_PARTITION_LOCATION_FIRST_SECTOR_BITS) >>
+                          PICOBIN_PARTITION_LOCATION_FIRST_SECTOR_LSB;
+  uint32_t last_sector = (partition_info.permissions_and_location &
+                          PICOBIN_PARTITION_LOCATION_LAST_SECTOR_BITS) >>
+                         PICOBIN_PARTITION_LOCATION_LAST_SECTOR_LSB;
+  uint32_t num_sectors = last_sector - first_sector + 1;
+
+  base_offset = first_sector * FLASH_SECTOR_SIZE;
+  size = num_sectors * FLASH_SECTOR_SIZE;
+  return true;
+}
+
+const void *Partition::get_contents(uint32_t offset) const {
+  return (const uint8_t *)XIP_NOCACHE_NOALLOC_NOTRANSLATE_BASE + base_offset +
+         offset;
+}

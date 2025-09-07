@@ -11,6 +11,7 @@ PACKET_MAGIC_END = 0x6DE1
 
 PACKET_TYPE_EMULATOR_PING = 0
 PACKET_TYPE_EMULATOR_TRACE = 1
+PACKET_TYPE_EMULATOR_BOOT = 2
 PACKET_TYPE_REPLY_XOR_MASK = 0x80
 
 
@@ -75,6 +76,14 @@ def do_trace(serial_port: serial.Serial, args: argparse.Namespace):
             print(f"{addr:#06x}", file=sys.stderr)
 
 
+def do_boot(serial_port: serial.Serial, args: argparse.Namespace):
+    reply = transfer_packet(serial_port, PACKET_TYPE_EMULATOR_BOOT, b"")
+    if reply == b"OK":
+        print("Boot command succeeded.", file=sys.stderr)
+    else:
+        exit("Boot command failed.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="rom-emulator-cli",
@@ -108,6 +117,12 @@ def main():
         help="Prints the most recently accessed ROM addresses.",
     )
     parser_trace.set_defaults(func=do_trace)
+
+    parser_boot = subparsers.add_parser(
+        name="boot",
+        help="Starts the ROM stored in flash memory.",
+    )
+    parser_boot.set_defaults(func=do_boot)
 
     args = parser.parse_args()
 
