@@ -129,6 +129,7 @@ def main():
     # Initialize the link to the ROM emulator.
     serial_port = serial.serial_for_url(
         args.serial,
+        baudrate=2400,
         inter_byte_timeout=5,  # inactivity timeout (only applies to reads)
     )
 

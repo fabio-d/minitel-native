@@ -16,6 +16,7 @@ target_include_directories(menu-rom PRIVATE
 target_link_libraries(menu-rom PRIVATE
   minitel_board
   minitel_keyboard
+  minitel_timer
   minitel_video
 )
 

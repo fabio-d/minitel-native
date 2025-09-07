@@ -32,6 +32,7 @@ static bool can_accept_boot_command = false;
 constexpr uint TRACE_MAX_SAMPLES = 128;
 static uint16_t trace_buf[TRACE_MAX_SAMPLES];
 
+static CliProtocolDecoder magic_io_decoder;
 static CliProtocolDecoder stdio_decoder;
 static CliProtocolEncoder encoder;
 
@@ -149,6 +150,10 @@ int main() {
           }
           break;
         }
+        case MagicIoSignal::UserRequestedClientMode: {
+          magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_CLIENT_MODE);
+          break;
+        }
         case MagicIoSignal::InTrampoline: {
           romemu_stop();
           in_menu = false;
@@ -156,6 +161,31 @@ int main() {
           load_rom_from_data_partition();
 
           romemu_start();
+          break;
+        }
+        // Interpret bytes received over magic I/O's serial tunnel with the
+        // client protocol.
+        case MagicIoSignal::SerialRx00... MagicIoSignal::SerialRxFF: {
+          uint8_t rx_byte = (uint)signal - (uint)MagicIoSignal::SerialRx00;
+          switch (magic_io_decoder.push(rx_byte)) {
+            case CliProtocolDecoder::PushResult::Idle: {
+              break;
+            }
+            case CliProtocolDecoder::PushResult::Error: {
+              magic_io_decoder.reset();
+              break;
+            }
+            case CliProtocolDecoder::PushResult::PacketAvailable: {
+              auto [reply_data, reply_length] =
+                  handle_packet(magic_io_decoder.get_packet_type(),
+                                magic_io_decoder.get_packet_data(),
+                                magic_io_decoder.get_packet_length());
+              for (uint i = 0; i < reply_length; i++) {
+                magic_io_enqueue_serial_tx(reply_data[i]);
+              }
+              break;
+            }
+          }
           break;
         }
       }

@@ -4,6 +4,7 @@
 #include <keyboard/keyboard.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <timer/timer.h>
 #include <video/commands.h>
 #include <video/mcu_interface.h>
 #include <video/registers.h>
@@ -12,6 +13,17 @@
 
 #define ATTR_WHITE_ON_BLACK 0x07
 #define ATTR_BLACK_ON_WHITE 0x47
+
+// Initializes the serial port ("peri-informatique") at 2400 baud 8N1.
+void serial_setup(void) {
+  const uint16_t rcap2 =
+      TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(2400));
+  T2CON = 0x30;
+  RCAP2H = rcap2 >> 8;
+  RCAP2L = rcap2 & 0xFF;
+  SCON = 0x50;
+  TR2 = 1;
+}
 
 // Initializes the video chip in 40 columns short mode.
 static void video_setup(void) {
@@ -84,17 +96,27 @@ static void run_main_menu(void) {
   video_set_attributes(ATTR_WHITE_ON_BLACK);
   printf(" to boot the stored ROM");
 
+  video_set_cursor(0, 22);
+  printf("Press ");
+  video_set_attributes(ATTR_BLACK_ON_WHITE);
+  printf(" S ");
+  video_set_attributes(ATTR_WHITE_ON_BLACK);
+  printf(" to enter serial client mode");
+
   while (magic_io_get_desired_state() == MAGIC_IO_DESIRED_STATE_MAIN_MENU) {
     KEYBOARD_FOR_EACH_PRESSED_KEY(key) {
       switch (key) {
         case KEY_B:
           magic_io_signal_user_requested_boot();
           break;
+        case KEY_S:
+          magic_io_signal_user_client_mode();
+          break;
       }
     }
   }
 
-  video_clear(0, 39, 2, 2);
+  video_clear(0, 39, 2, 22);
 }
 
 static void run_boot_trampoline(void) {
@@ -117,7 +139,42 @@ static void run_partition_error(void) {
   video_clear(0, 39, 2, 2);
 }
 
+static void run_client_mode(void) {
+  video_set_attributes(ATTR_WHITE_ON_BLACK);
+  video_set_cursor(0, 2);
+  printf("Serial client mode is active.");
+  video_set_cursor(0, 4);
+  printf("Running at 2400 baud, 8N1.");
+
+  TI = 1;
+
+  while (magic_io_get_desired_state() == MAGIC_IO_DESIRED_STATE_CLIENT_MODE) {
+    uint8_t value;
+
+    // Serial-to-emulator.
+    if (RI) {
+      value = SBUF;
+      RI = 0;
+
+      magic_io_tx_byte(value);
+    }
+
+    // Emulator-to-serial.
+    if (TI && magic_io_rx_byte(&value)) {
+      TI = 0;
+      SBUF = value;
+    }
+  }
+
+  while (!TI) {
+  }
+  TI = 0;
+
+  video_clear(0, 39, 2, 4);
+}
+
 void main(void) {
+  serial_setup();
   video_setup();
   board_controls_set_defaults();
   magic_io_reset();
@@ -137,6 +194,9 @@ void main(void) {
         break;
       case MAGIC_IO_DESIRED_STATE_PARTITION_ERROR:
         run_partition_error();
+        break;
+      case MAGIC_IO_DESIRED_STATE_CLIENT_MODE:
+        run_client_mode();
         break;
     }
   }

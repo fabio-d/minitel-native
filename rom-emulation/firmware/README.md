@@ -44,8 +44,9 @@ where:
     to be emulated. No other features, in addition to just serving the ROM, will
     be enabled.
   * If set to `interactive`, the Minitel shows an interactive menu on its
-    screen at power on. Using the Minitel's keyboard, it is then possible to
-    proceed to booting the actual ROM.
+    screen at power on. Using the Minitel's keyboard, it is possible to either
+    proceed to booting the actual ROM or to enter _serial client mode_ (see
+    [Client protocol](#client-protocol) below).
 
 ## Installation
 
@@ -93,6 +94,10 @@ used to interact with the firmware while it is running on the Pico.
 
 It supports the following connection channels:
 * The Pico's own USB serial port (usage: `rom-emulator-cli.py -s /dev/ttyACM0`).
+* The Minitel's "p&eacute;ri-informatique" port (`interactive` mode only; usage:
+  select _serial client mode_ in the menu first, and then use
+  `rom-emulator-cli.py -s /dev/ttyUSB0` on the computer, provided the Minitel is
+  connected as described [here](https://pila.fr/wordpress/?p=361)).
 
 Always available commands:
 * `ping`: verifies that the Pico program is responding.

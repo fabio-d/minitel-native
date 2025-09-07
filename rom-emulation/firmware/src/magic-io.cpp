@@ -36,6 +36,21 @@ void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   SET_FIELD(a.user_requested_boot, 1);
   SET_FIELD(p.desired_state, (uint8_t)desired_state);
 
+  SET_FIELD(a.user_requested_client_mode_sync1, 1);
+  SET_FIELD(a.user_requested_client_mode_sync2, 0);
+
+  // Initialize serial, emulator-to-minitel direction.
+  for (uint i = 0; i < 256; i++) {
+    SET_INDEXED_FIELD(a.serial_data_tx, i, 1);
+  }
+  SET_FIELD(a.serial_data_tx_ack, 0);
+
+  // Initialize serial, minitel-to-emulator direction.
+  serial_rx_buf_rpos = serial_rx_buf_cnt = 0;
+  SET_FIELD(p.serial_data_rx_nonempty, 0);
+  SET_FIELD(a.serial_data_rx_lock, 1);
+  SET_FIELD(a.serial_data_rx_unlock, 0);
+
   // Write trampoline (infinite SJMP loop followed by a NOP).
   romemu_write(TRAMPOLINE_ADDRESS + 0, 0x80);
   romemu_write(TRAMPOLINE_ADDRESS + 1, 0xFE);
@@ -49,6 +64,15 @@ void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
 void magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_t new_state) {
   desired_state = new_state;
   SET_FIELD(p.desired_state, (uint8_t)desired_state);
+}
+
+void magic_io_enqueue_serial_tx(uint8_t data) {
+  if (serial_rx_buf_cnt != sizeof(serial_rx_buf)) {
+    uint wpos =
+        (serial_rx_buf_rpos + serial_rx_buf_cnt++) % sizeof(serial_rx_buf);
+    serial_rx_buf[wpos] = data;
+    SET_FIELD(p.serial_data_rx_nonempty, 1);
+  }
 }
 
 MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
@@ -108,6 +132,56 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
     case ADDRESS_OF(a.user_requested_boot): {
       SET_FIELD(a.user_requested_boot, 0);
       return MagicIoSignal::UserRequestedBoot;
+    }
+    case ADDRESS_OF(a.user_requested_client_mode_sync1): {
+      SET_FIELD(a.user_requested_client_mode_sync2, 1);
+      SET_FIELD(a.user_requested_client_mode_sync1, 0);
+      return MagicIoSignal::None;
+    }
+    case ADDRESS_OF(a.user_requested_client_mode_sync2): {
+      SET_FIELD(a.user_requested_client_mode_sync1, 1);
+      SET_FIELD(a.user_requested_client_mode_sync2, 0);
+      return MagicIoSignal::UserRequestedClientMode;
+    }
+    case ADDRESS_OF(a.serial_data_tx)...(ADDRESS_OF(a.serial_data_tx) + 0xFF): {
+      uint8_t tx_value = (uint8_t)(address - ADDRESS_OF(a.serial_data_tx));
+      if (serial_tx_buf != tx_value) {
+        // This assignment should never be needed, if the other side is
+        // following the protocol, but let's do it out of precaution.
+        SET_INDEXED_FIELD(a.serial_data_tx, serial_tx_buf, 1);
+        serial_tx_buf = tx_value;
+      }
+      SET_FIELD(a.serial_data_tx_ack, 1);
+      SET_INDEXED_FIELD(a.serial_data_tx, serial_tx_buf, 0);
+      return MagicIoSignal::None;
+    }
+    case ADDRESS_OF(a.serial_data_tx_ack): {
+      SET_INDEXED_FIELD(a.serial_data_tx, serial_tx_buf, 1);
+      SET_FIELD(a.serial_data_tx_ack, 0);
+      return (MagicIoSignal)((uint)MagicIoSignal::SerialRx00 + serial_tx_buf);
+    }
+    case ADDRESS_OF(a.serial_data_rx_lock): {
+      if (serial_rx_buf_cnt == 0) {
+        // This should never happen if the other side follows the protocol.
+        // Let's try to recover somehow.
+        SET_FIELD(p.serial_data_rx_data, '?');
+      } else {
+        // Pop one element from the circular queue.
+        SET_FIELD(p.serial_data_rx_data, serial_rx_buf[serial_rx_buf_rpos++]);
+        if (serial_rx_buf_rpos == sizeof(serial_rx_buf)) {
+          serial_rx_buf_rpos = 0;
+        }
+        serial_rx_buf_cnt--;
+      }
+      SET_FIELD(p.serial_data_rx_nonempty, serial_rx_buf_cnt != 0);
+      SET_FIELD(a.serial_data_rx_unlock, 1);
+      SET_FIELD(a.serial_data_rx_lock, 0);
+      return MagicIoSignal::None;
+    }
+    case ADDRESS_OF(a.serial_data_rx_unlock): {
+      SET_FIELD(a.serial_data_rx_lock, 1);
+      SET_FIELD(a.serial_data_rx_unlock, 0);
+      return MagicIoSignal::None;
     }
     default: {
       return MagicIoSignal::None;
