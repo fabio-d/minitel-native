@@ -1,5 +1,9 @@
 # Firmware for the ROM Emulation board
 
+<p align="center">
+<img src="pictures/main_menu.jpg" width="50%" />
+</p>
+
 ## Building from source
 
 Download the Pico SDK (tested with version 2.2.0) and the other prerequisites:
@@ -43,9 +47,10 @@ where:
   * If set to `embedded`, `EMBED_ROM_FILE` should be set to path to the ROM file
     to be emulated. No other features, in addition to just serving the ROM, will
     be enabled.
-  * If set to `interactive`, the Minitel shows an interactive menu on its
-    screen at power on. Using the Minitel's keyboard, it is possible to either
-    proceed to booting the actual ROM or to enter _serial client mode_ (see
+  * If set to `interactive`, up to 16 different ROMs can be stored, and the
+    Minitel shows an interactive menu on its screen at power on. Using the
+    Minitel's keyboard, it is possible to either proceed to booting one of the
+    stored ROMs or to enter _serial client mode_ (see
     [Client protocol](#client-protocol) below).
 
 ## Installation
@@ -75,11 +80,24 @@ the end of the process and the Pico's on-board LED will start to blink,
 indicating that the ROM emulation software is running.
 
 After installing `build/rom-emulator-full-install.uf2` once, storing/updating
-the ROM to be booted currently requires the `picotool` program (but this will
-change in the next commits):
+the catalog of stored ROMs currently requires the `picotool` program and an
+helper script (but this will change in the next commits):
 ```shell
+# First step: Create a data partition image containing the desired ROMs.
+# Use options from --slot0 to --slotF to optionally populate each of the 16
+# boot options ("slots"). The slots are identified by an hex digit ("SLOT_ID"),
+# that is, in order: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E and F.
+# For each ROM, it is necessary to pass the path and the title that will be
+# displayed in the menu.
+$ scripts/generate-data-partition.py \
+    --slot0 /path/to/hello_world.bin "Hello World" \
+    --slot1 /path/to/another_rom.bin "Another ROM" \
+    --slotF /path/to/yet_another_rom.bin "This ROM is stored in the last slot" \
+    --output data_part.bin
+
+# Second step: Flash the resulting image into the data partition.
 # Power the board while BOOTSEL is pressed, then:
-$ picotool load -p 2 /path/to/rom.bin  # note: -p 2 selects the "DATA" partition
+$ picotool load -p 2 data_part.bin  # note: -p 2 selects the "DATA" partition
 ```
 
 Similarly, after installing `build/rom-emulator-full-install.uf2`, subsequent
@@ -104,4 +122,5 @@ Always available commands:
 * `trace`: prints the most recent ROM addresses fetched by the Minitel's CPU.
 
 Only if `OPERATING_MODE` is `interactive`:
-* `boot`: equivalent to selecting the boot command in the interactive menu.
+* `boot -n SLOT_ID`: equivalent to choosing to boot the ROM at `SLOT_ID` from
+  the interactive menu.

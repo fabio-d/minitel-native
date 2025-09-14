@@ -77,11 +77,26 @@ def do_trace(serial_port: serial.Serial, args: argparse.Namespace):
 
 
 def do_boot(serial_port: serial.Serial, args: argparse.Namespace):
-    reply = transfer_packet(serial_port, PACKET_TYPE_EMULATOR_BOOT, b"")
+    reply = transfer_packet(
+        serial_port,
+        PACKET_TYPE_EMULATOR_BOOT,
+        struct.pack("<B", args.slot),
+    )
     if reply == b"OK":
         print("Boot command succeeded.", file=sys.stderr)
     else:
         exit("Boot command failed.")
+
+
+# Parses the --slot argument.
+#
+# Note: the name of this function is shown in argparse's error message when the
+# user supplies an invalid value.
+def SLOT(text: str) -> int:
+    value = int(text, 16)
+    if value < 0 or value > 15:
+        raise ValueError
+    return value
 
 
 def main():
@@ -121,6 +136,13 @@ def main():
     parser_boot = subparsers.add_parser(
         name="boot",
         help="Starts the ROM stored in flash memory.",
+    )
+    parser_boot.add_argument(
+        "-n",
+        "--slot",
+        type=SLOT,
+        help="ROM slot number to boot from (hex value between 0 and F).",
+        required=True,
     )
     parser_boot.set_defaults(func=do_boot)
 

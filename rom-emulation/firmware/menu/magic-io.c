@@ -11,8 +11,8 @@ void magic_io_reset(void) {
   }
 }
 
-void magic_io_signal_user_requested_boot(void) {
-  while (MAGIC_IO->a.user_requested_boot) {
+void magic_io_signal_user_requested_boot(uint8_t slot_num) {
+  while (MAGIC_IO->a.user_requested_boot[slot_num]) {
   }
 }
 
@@ -53,4 +53,14 @@ bool magic_io_rx_byte(uint8_t *c) {
   }
 
   return true;
+}
+
+__code const MAGIC_IO_CONFIGURATION_DATA_ROM_t *
+magic_io_get_configuration_rom_slot(uint8_t slot_num) {
+  while (MAGIC_IO->a.configuration_load_block_rom_slot[slot_num]) {
+  }
+  while (MAGIC_IO->a.configuration_load_block_ack) {
+  }
+
+  return &MAGIC_IO->p.configuration_loaded_block.rom;
 }

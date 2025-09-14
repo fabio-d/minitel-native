@@ -5,7 +5,7 @@
 
 void magic_io_reset(void);
 
-void magic_io_signal_user_requested_boot(void);
+void magic_io_signal_user_requested_boot(uint8_t slot_num);
 
 void magic_io_signal_user_client_mode(void);
 
@@ -15,6 +15,9 @@ void magic_io_jump_to_trampoline(void);
 
 void magic_io_tx_byte(uint8_t c);
 
-bool magic_io_rx_byte(uint8_t *c);
+bool magic_io_rx_byte(uint8_t* c);
+
+__code const MAGIC_IO_CONFIGURATION_DATA_ROM_t*
+magic_io_get_configuration_rom_slot(uint8_t slot_num);
 
 #endif

@@ -199,6 +199,9 @@ def main():
     # Erase the first block in partition B to prevent it from booting.
     flash_image.set_contents(b_start, b"\xff" * BLOCK_SIZE)
 
+    # Clear the superblock in partition DATA.
+    flash_image.set_contents(data_start, b"\xff" * BLOCK_SIZE)
+
     # Write the output file.
     flash_image.save_to_uf2(args.output)
 

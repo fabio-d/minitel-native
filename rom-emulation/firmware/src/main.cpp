@@ -1,10 +1,12 @@
-#include <boot/uf2.h>
 #include <hardware/structs/busctrl.h>
 #include <pico/binary_info.h>
 #include <pico/stdlib.h>
 #include <pico/time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include <algorithm>
 
 #include "cli-protocol.h"
 #include "embedded-rom-array.h"
@@ -36,7 +38,8 @@ static CliProtocolDecoder magic_io_decoder;
 static CliProtocolDecoder stdio_decoder;
 static CliProtocolEncoder encoder;
 
-static Partition data_partition;
+static ConfigurationPartition data_partition;
+static uint selected_boot_slot_num;
 
 static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
                                                       const void *packet_data,
@@ -57,11 +60,23 @@ static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
       return encoder.finalize();
     }
     case CLI_PACKET_TYPE_EMULATOR_BOOT: {
+      if (packet_length != 1 || *(uint8_t *)packet_data >= 16) {
+        return {nullptr, 0};  // Malformed request: do not reply.
+      }
+
       encoder.begin(CLI_PACKET_TYPE_EMULATOR_BOOT ^
                     CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      selected_boot_slot_num = *(const uint8_t *)packet_data;
+      bool slot_is_present =
+          data_partition.get_rom_info(selected_boot_slot_num).is_present();
       if (can_accept_boot_command) {
-        magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_BOOT_TRAMPOLINE);
-        encoder.push("OK", 2);
+        if (slot_is_present) {
+          magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_BOOT_TRAMPOLINE);
+          encoder.push("OK", 2);
+        } else {
+          magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_EMPTY_SLOT_ERROR);
+          encoder.push("EMPTY", 5);
+        }
         can_accept_boot_command = false;
       } else {
         encoder.push("BUSY", 4);
@@ -75,9 +90,10 @@ static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
 }
 
 static void load_rom_from_data_partition() {
-  const uint8_t *src =
-      static_cast<const uint8_t *>(data_partition.get_contents(0));
-  for (uint32_t i = 0; i < MAX_ROM_SIZE; i++) {
+  const ConfigurationPartition::RomInfo &info =
+      data_partition.get_rom_info(selected_boot_slot_num);
+  const uint8_t *src = data_partition.get_rom_contents(selected_boot_slot_num);
+  for (uint32_t i = 0; i < MAX_ROM_SIZE && i < info.size; i++) {
     romemu_write(i, src[i]);
   }
 }
@@ -109,7 +125,7 @@ int main() {
 
 #if ROM_EMULATOR_IS_INTERACTIVE == 1
   // Locate and open the data partition.
-  bool partition_ok = data_partition.open_with_family_id(DATA_FAMILY_ID);
+  bool partition_ok = data_partition.open();
 
   magic_io_prepare_rom(partition_ok ? MAGIC_IO_DESIRED_STATE_MAIN_MENU
                                     : MAGIC_IO_DESIRED_STATE_PARTITION_ERROR);
@@ -143,9 +159,16 @@ int main() {
         case MagicIoSignal::None: {
           break;
         }
-        case MagicIoSignal::UserRequestedBoot: {
+        case MagicIoSignal::UserRequestedBoot0... MagicIoSignal::
+            UserRequestedBoot15: {
+          selected_boot_slot_num =
+              (uint)signal - (uint)MagicIoSignal::UserRequestedBoot0;
+          bool slot_is_present =
+              data_partition.get_rom_info(selected_boot_slot_num).is_present();
           if (can_accept_boot_command) {
-            magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_BOOT_TRAMPOLINE);
+            magic_io_set_desired_state(
+                slot_is_present ? MAGIC_IO_DESIRED_STATE_BOOT_TRAMPOLINE
+                                : MAGIC_IO_DESIRED_STATE_EMPTY_SLOT_ERROR);
             can_accept_boot_command = false;
           }
           break;
@@ -186,6 +209,26 @@ int main() {
               break;
             }
           }
+          break;
+        }
+        case MagicIoSignal::ConfigurationDataRom0... MagicIoSignal::
+            ConfigurationDataRom15: {
+          uint slot_num =
+              (uint)signal - (uint)MagicIoSignal::ConfigurationDataRom0;
+
+          const ConfigurationPartition::RomInfo &src =
+              data_partition.get_rom_info(slot_num);
+          MAGIC_IO_CONFIGURATION_DATA_t buf = {};
+          if (src.is_present()) {
+            buf.rom.is_present = 1;
+            buf.rom.name_length = src.name_length;
+            memcpy(buf.rom.name, src.name,
+                   std::min<size_t>(src.name_length, sizeof(buf.rom.name)));
+          } else {
+            buf.rom.is_present = 0;
+          }
+
+          magic_io_fill_configuration_block(buf);
           break;
         }
       }

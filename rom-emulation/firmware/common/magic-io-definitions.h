@@ -5,11 +5,23 @@
 
 // The Pico can ask the Minitel to be in one of these states.
 typedef enum {
-  MAGIC_IO_DESIRED_STATE_MAIN_MENU,        // In the main menu.
-  MAGIC_IO_DESIRED_STATE_BOOT_TRAMPOLINE,  // In the boot trampoline.
-  MAGIC_IO_DESIRED_STATE_PARTITION_ERROR,  // Partitioning error.
-  MAGIC_IO_DESIRED_STATE_CLIENT_MODE,      // Serial tunnel.
+  MAGIC_IO_DESIRED_STATE_MAIN_MENU,         // In the main menu.
+  MAGIC_IO_DESIRED_STATE_BOOT_TRAMPOLINE,   // In the boot trampoline.
+  MAGIC_IO_DESIRED_STATE_PARTITION_ERROR,   // Partitioning error.
+  MAGIC_IO_DESIRED_STATE_EMPTY_SLOT_ERROR,  // ROM slot is empty.
+  MAGIC_IO_DESIRED_STATE_CLIENT_MODE,       // Serial tunnel.
 } MAGIC_IO_DESIRED_STATE_t;
+
+// Configuration data provided by the Pico.
+typedef struct {
+  uint8_t is_present;  // 0 or 1
+  uint8_t name_length;
+  char name[126];
+} MAGIC_IO_CONFIGURATION_DATA_ROM_t;
+typedef union {
+  uint8_t raw[128];
+  MAGIC_IO_CONFIGURATION_DATA_ROM_t rom;
+} MAGIC_IO_CONFIGURATION_DATA_t;
 
 typedef struct {
   // When read, these ROM locations trigger actions on the Pico.
@@ -20,8 +32,8 @@ typedef struct {
     volatile uint8_t reset_generation_count;
 
     // For telling the Pico that the user requested to proceed to the ROM:
-    // - Poll user_requested_boot until it goes to 0.
-    volatile uint8_t user_requested_boot;
+    // - Poll user_requested_boot[slot_num] until it goes to 0.
+    volatile uint8_t user_requested_boot[16];
 
     // For telling the Pico that the user requested to enter client mode:
     // - Poll user_requested_client_mode_sync1 until it goes to 0.
@@ -43,6 +55,14 @@ typedef struct {
     // - Poll serial_data_rx_unlock until it goes to 0.
     volatile uint8_t serial_data_rx_lock;
     volatile uint8_t serial_data_rx_unlock;
+
+    // For requesting a configuration block to be loaded into the read buffer.
+    // - Poll the variable corresponding to the block to be read until it goes
+    //   to 0.
+    // - Poll configuration_load_block_ack until it goes to zero.
+    // - Read the buffer (configuration_loaded_block).
+    volatile uint8_t configuration_load_block_rom_slot[16];
+    volatile uint8_t configuration_load_block_ack;
   } a;
 
   // Reading these locations does not send any signal.
@@ -52,6 +72,9 @@ typedef struct {
     // See serial_data_rx_lock and serial_data_rx_unlock.
     uint8_t serial_data_rx_nonempty;
     uint8_t serial_data_rx_data;
+
+    // See configuration_load_block_*.
+    MAGIC_IO_CONFIGURATION_DATA_t configuration_loaded_block;
   } p;
 } MAGIC_IO_t;
 

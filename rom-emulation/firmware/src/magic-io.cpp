@@ -30,6 +30,8 @@ static uint8_t serial_tx_buf = 0;
 static uint8_t serial_rx_buf[CLI_PACKET_MAX_ENCODED_LENGTH];
 static uint serial_rx_buf_rpos = 0, serial_rx_buf_cnt = 0;
 
+static std::optional<uint> configuration_load_last_rom_slot;
+
 void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   desired_state = initial_state;
 
@@ -50,6 +52,13 @@ void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   SET_FIELD(p.serial_data_rx_nonempty, 0);
   SET_FIELD(a.serial_data_rx_lock, 1);
   SET_FIELD(a.serial_data_rx_unlock, 0);
+
+  // Initialize configuration requests.
+  configuration_load_last_rom_slot = std::nullopt;
+  for (uint i = 0; i < 16; i++) {
+    SET_INDEXED_FIELD(a.configuration_load_block_rom_slot, i, 1);
+  }
+  SET_FIELD(a.configuration_load_block_ack, 0);
 
   // Write trampoline (infinite SJMP loop followed by a NOP).
   romemu_write(TRAMPOLINE_ADDRESS + 0, 0x80);
@@ -72,6 +81,12 @@ void magic_io_enqueue_serial_tx(uint8_t data) {
         (serial_rx_buf_rpos + serial_rx_buf_cnt++) % sizeof(serial_rx_buf);
     serial_rx_buf[wpos] = data;
     SET_FIELD(p.serial_data_rx_nonempty, 1);
+  }
+}
+
+void magic_io_fill_configuration_block(const MAGIC_IO_CONFIGURATION_DATA_t &v) {
+  for (uint i = 0; i < sizeof(MAGIC_IO_CONFIGURATION_DATA_t); i++) {
+    SET_INDEXED_FIELD(p.configuration_loaded_block, i, v.raw[i]);
   }
 }
 
@@ -129,9 +144,12 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
       magic_io_prepare_rom(desired_state);
       return MagicIoSignal::None;
     }
-    case ADDRESS_OF(a.user_requested_boot): {
-      SET_FIELD(a.user_requested_boot, 0);
-      return MagicIoSignal::UserRequestedBoot;
+    case ADDRESS_OF(a.user_requested_boot)...(
+        ADDRESS_OF(a.user_requested_boot) + 15): {
+      uint8_t slot_num = (uint8_t)(address - ADDRESS_OF(a.user_requested_boot));
+      SET_INDEXED_FIELD(a.user_requested_boot, slot_num, 0);
+      return (MagicIoSignal)((uint)MagicIoSignal::UserRequestedBoot0 +
+                             slot_num);
     }
     case ADDRESS_OF(a.user_requested_client_mode_sync1): {
       SET_FIELD(a.user_requested_client_mode_sync2, 1);
@@ -181,6 +199,34 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
     case ADDRESS_OF(a.serial_data_rx_unlock): {
       SET_FIELD(a.serial_data_rx_lock, 1);
       SET_FIELD(a.serial_data_rx_unlock, 0);
+      return MagicIoSignal::None;
+    }
+    case ADDRESS_OF(a.configuration_load_block_rom_slot)...(
+        ADDRESS_OF(a.configuration_load_block_rom_slot) + 15): {
+      uint slot_num =
+          (uint)(address - ADDRESS_OF(a.configuration_load_block_rom_slot));
+      if (configuration_load_last_rom_slot.has_value()) {
+        // This should never happen if the other side follows the protocol.
+        // Let's try to recover somehow.
+        SET_INDEXED_FIELD(a.configuration_load_block_rom_slot,
+                          *configuration_load_last_rom_slot, 1);
+      }
+      configuration_load_last_rom_slot = slot_num;
+      SET_FIELD(a.configuration_load_block_ack, 1);
+      SET_INDEXED_FIELD(a.configuration_load_block_rom_slot, slot_num, 0);
+      return (MagicIoSignal)((uint)MagicIoSignal::ConfigurationDataRom0 +
+                             slot_num);
+    }
+    case ADDRESS_OF(a.configuration_load_block_ack): {
+      if (configuration_load_last_rom_slot.has_value()) {
+        SET_INDEXED_FIELD(a.configuration_load_block_rom_slot,
+                          *configuration_load_last_rom_slot, 1);
+        configuration_load_last_rom_slot = std::nullopt;
+      } else {
+        // This branch should never be taken if the other side follows the
+        // protocol.
+      }
+      SET_FIELD(a.configuration_load_block_ack, 0);
       return MagicIoSignal::None;
     }
     default: {

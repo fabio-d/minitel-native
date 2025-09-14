@@ -12,6 +12,7 @@
 #include "magic-io.h"
 
 #define ATTR_WHITE_ON_BLACK 0x07
+#define ATTR_GRAY_ON_BLACK 0x02
 #define ATTR_BLACK_ON_WHITE 0x47
 
 // Initializes the serial port ("peri-informatique") at 2400 baud 8N1.
@@ -88,14 +89,26 @@ int putchar(int c) {
 }
 
 static void run_main_menu(void) {
-  video_set_attributes(ATTR_WHITE_ON_BLACK);
-  video_set_cursor(0, 2);
-  printf("Press ");
-  video_set_attributes(ATTR_BLACK_ON_WHITE);
-  printf(" B ");
-  video_set_attributes(ATTR_WHITE_ON_BLACK);
-  printf(" to boot the stored ROM");
+  for (uint8_t i = 0; i < 16; i++) {
+    __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t* rom =
+        magic_io_get_configuration_rom_slot(i);
 
+    video_set_cursor(0, 2 + i);
+    if (rom->is_present) {
+      video_set_attributes(ATTR_BLACK_ON_WHITE);
+      printf(" %X ", i);
+      video_set_attributes(ATTR_WHITE_ON_BLACK);
+      putchar(' ');
+      for (uint8_t j = 0; j < rom->name_length && j < 36; j++) {
+        putchar(rom->name[j]);
+      }
+    } else {
+      video_set_attributes(ATTR_GRAY_ON_BLACK);
+      printf("(slot %X is empty)", i);
+    }
+  }
+
+  video_set_attributes(ATTR_WHITE_ON_BLACK);
   video_set_cursor(0, 22);
   printf("Press ");
   video_set_attributes(ATTR_BLACK_ON_WHITE);
@@ -106,8 +119,53 @@ static void run_main_menu(void) {
   while (magic_io_get_desired_state() == MAGIC_IO_DESIRED_STATE_MAIN_MENU) {
     KEYBOARD_FOR_EACH_PRESSED_KEY(key) {
       switch (key) {
+        case KEY_0:
+          magic_io_signal_user_requested_boot(0);
+          break;
+        case KEY_1:
+          magic_io_signal_user_requested_boot(1);
+          break;
+        case KEY_2:
+          magic_io_signal_user_requested_boot(2);
+          break;
+        case KEY_3:
+          magic_io_signal_user_requested_boot(3);
+          break;
+        case KEY_4:
+          magic_io_signal_user_requested_boot(4);
+          break;
+        case KEY_5:
+          magic_io_signal_user_requested_boot(5);
+          break;
+        case KEY_6:
+          magic_io_signal_user_requested_boot(6);
+          break;
+        case KEY_7:
+          magic_io_signal_user_requested_boot(7);
+          break;
+        case KEY_8:
+          magic_io_signal_user_requested_boot(8);
+          break;
+        case KEY_9:
+          magic_io_signal_user_requested_boot(9);
+          break;
+        case KEY_A:
+          magic_io_signal_user_requested_boot(10);
+          break;
         case KEY_B:
-          magic_io_signal_user_requested_boot();
+          magic_io_signal_user_requested_boot(11);
+          break;
+        case KEY_C:
+          magic_io_signal_user_requested_boot(12);
+          break;
+        case KEY_D:
+          magic_io_signal_user_requested_boot(13);
+          break;
+        case KEY_E:
+          magic_io_signal_user_requested_boot(14);
+          break;
+        case KEY_F:
+          magic_io_signal_user_requested_boot(15);
           break;
         case KEY_S:
           magic_io_signal_user_client_mode();
@@ -134,6 +192,18 @@ static void run_partition_error(void) {
 
   while (magic_io_get_desired_state() ==
          MAGIC_IO_DESIRED_STATE_PARTITION_ERROR) {
+  }
+
+  video_clear(0, 39, 2, 2);
+}
+
+static void run_empty_slot_error(void) {
+  video_set_attributes(ATTR_WHITE_ON_BLACK);
+  video_set_cursor(0, 2);
+  printf("Error! The requested ROM slot is empty.");
+
+  while (magic_io_get_desired_state() ==
+         MAGIC_IO_DESIRED_STATE_EMPTY_SLOT_ERROR) {
   }
 
   video_clear(0, 39, 2, 2);
@@ -194,6 +264,9 @@ void main(void) {
         break;
       case MAGIC_IO_DESIRED_STATE_PARTITION_ERROR:
         run_partition_error();
+        break;
+      case MAGIC_IO_DESIRED_STATE_EMPTY_SLOT_ERROR:
+        run_empty_slot_error();
         break;
       case MAGIC_IO_DESIRED_STATE_CLIENT_MODE:
         run_client_mode();

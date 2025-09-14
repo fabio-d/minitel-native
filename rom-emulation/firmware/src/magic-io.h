@@ -17,9 +17,18 @@ constexpr uint16_t MAGIC_RANGE_END = MAGIC_RANGE_BASE + sizeof(MAGIC_IO_t);
 // The Minitel can send one of these signals to the Pico.
 enum class MagicIoSignal {
   None,
-  UserRequestedBoot,        // User asked to proceed to the next ROM.
   UserRequestedClientMode,  // User asked to start serial tunnel.
   InTrampoline,             // Readiness to safely switch to another ROM.
+
+  // User asked to proceed to the ROM in the given slot number.
+  UserRequestedBoot0,
+  // ... all the possible values in between ...
+  UserRequestedBoot15 = UserRequestedBoot0 + 15,
+
+  // Request to populate the given configuration block with current data.
+  ConfigurationDataRom0,
+  // ... all the possible values in between ...
+  ConfigurationDataRom15 = ConfigurationDataRom0 + 15,
 
   // Serial data received by the Minitel CPU and forwarded to the Pico.
   SerialRx00,
@@ -36,6 +45,10 @@ void magic_io_set_desired_state(MAGIC_IO_DESIRED_STATE_t new_state);
 
 // Enqueues a byte so that it will eventually be emitted by the Minitel's CPU.
 void magic_io_enqueue_serial_tx(uint8_t data);
+
+// Fill the configuration block with the given data. This function must be
+// called in response to ConfigurationData* signals.
+void magic_io_fill_configuration_block(const MAGIC_IO_CONFIGURATION_DATA_t &v);
 
 // Determines what signal is being trasnmitted by the Minitel CPU by looking at
 // the most recent ROM accesses.
