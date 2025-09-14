@@ -15,6 +15,26 @@
 #define ATTR_GRAY_ON_BLACK 0x02
 #define ATTR_BLACK_ON_WHITE 0x47
 
+// Initializes the timer 0 to overflow every 100 uS.
+void timer_setup(void) {
+  const uint8_t reload =
+      TIMER_TICKS_TO_RELOAD_VALUE_8(TIMER_TICKS_FROM_US(100));
+  TMOD = 0x02;
+  TH0 = reload;
+  TL0 = reload;
+  TR0 = 1;
+}
+
+// Waits the given number of timer 0 overflow events, e.g. 10000 = 1 second.
+void timer_delay(uint16_t ticks) {
+  while (ticks-- != 0) {
+    // Wait overflow.
+    TF0 = 0;
+    while (!TF0) {
+    }
+  }
+}
+
 // Initializes the serial port ("peri-informatique") at 2400 baud 8N1.
 void serial_setup(void) {
   const uint16_t rcap2 =
@@ -244,15 +264,21 @@ static void run_client_mode(void) {
 }
 
 void main(void) {
+  timer_setup();
   serial_setup();
   video_setup();
   board_controls_set_defaults();
-  magic_io_reset();
 
+  // Wait 2 seconds before displaying any non-black pixel, to give the CRT some
+  // time to settle.
   video_set_attributes(ATTR_WHITE_ON_BLACK);
   video_clear(0, 39, 0, 24);
+  timer_delay(20000);
+
   video_set_cursor(0, 0);
   printf("Minitel ROM Emulator");
+
+  magic_io_reset();
 
   while (true) {
     switch (magic_io_get_desired_state()) {

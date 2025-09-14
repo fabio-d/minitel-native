@@ -120,9 +120,6 @@ int main() {
     romemu_write(i, EMBEDDED_ROM[i]);
   }
 
-  stdio_init_all();
-  sleep_ms(1000);
-
 #if ROM_EMULATOR_IS_INTERACTIVE == 1
   // Locate and open the data partition.
   bool partition_ok = data_partition.open();
@@ -134,6 +131,7 @@ int main() {
 #endif
 
   romemu_start();
+  stdio_init_all();
 
   absolute_time_t next_toggle = get_absolute_time();
   bool led_on = true;
