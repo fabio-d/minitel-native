@@ -2,6 +2,8 @@
 import argparse
 import struct
 
+BLOCK_SIZE = 0x1000
+NUM_SUPERBLOCKS = 16
 MAX_ROM_SIZE = 64 * 1024
 
 
@@ -45,7 +47,8 @@ def main():
 
     # Generate the partition image.
     with open(args.output, "wb") as fp:
-        # Write the superblock.
+        # Write the first superblock.
+        fp.write(struct.pack("<I", 0xFFFFFFFE))  # generation counter
         for contents, name in roms:
             fp.write(
                 struct.pack(
@@ -55,8 +58,12 @@ def main():
                 )
             )
 
+        # Ensure all the remaining superblocks are filled with 0xFF to
+        # invalidate them.
+        start_pos = BLOCK_SIZE * NUM_SUPERBLOCKS
+        fp.write(bytes([0xFF]) * (start_pos - fp.tell()))
+
         # Store ROM contents at the corresponding locations.
-        start_pos = 0x1000
         for contents, name in roms:
             if contents is not None:
                 # Fill the gap until start_pos with 0xFF.

@@ -9,6 +9,7 @@ from itertools import batched
 
 BLOCK_SIZE = 0x1000  # i.e. the flash erase size
 ALL_PERMISSIONS = {"secure": "rw", "nonsecure": "rw", "bootloader": "rw"}
+NUM_SUPERBLOCKS = 16
 
 
 class FlashImage:
@@ -199,8 +200,9 @@ def main():
     # Erase the first block in partition B to prevent it from booting.
     flash_image.set_contents(b_start, b"\xff" * BLOCK_SIZE)
 
-    # Clear the superblock in partition DATA.
-    flash_image.set_contents(data_start, b"\xff" * BLOCK_SIZE)
+    # Clear the superblocks in partition DATA.
+    total_superblocks_size = BLOCK_SIZE * NUM_SUPERBLOCKS
+    flash_image.set_contents(data_start, b"\xff" * total_superblocks_size)
 
     # Write the output file.
     flash_image.save_to_uf2(args.output)

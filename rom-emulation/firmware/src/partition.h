@@ -4,6 +4,8 @@
 #include <hardware/flash.h>
 #include <pico/types.h>
 
+#include <optional>
+
 // Raw partition access.
 class Partition {
  public:
@@ -16,17 +18,44 @@ class Partition {
   // Obtains a pointer to the memory-mapped flash sector.
   const void *get_contents(uint32_t offset) const;
 
+  // Erases the given flash sector.
+  //
+  // This turns all bits in the sector to 1.
+  void erase(uint32_t sector_offset);
+
+  // Writes the buffer into the given flash sector.
+  //
+  // The new sector contents will be the result of a bitwise AND operation of
+  // its current contents and the buffer. In other words, it can only change
+  // 1s into 0s. Use erase() to set the flash sector to all 1s.
+  void write_from_buffer(uint32_t sector_offset);
+
+  // Combines erase and write_from_buffer, skipping the erase is not needed.
+  void erase_and_write_from_buffer(uint32_t sector_offset);
+
+  alignas(max_align_t) uint8_t buffer[FLASH_SECTOR_SIZE];
+
  private:
+  bool validate_sector_offset(uint32_t sector_offset);
+
   uint32_t base_offset, size;
 };
 
 // Mediates access to the data partition.
 //
 // The data partition is organized as follows:
-// - The first sector contains the Superblock data structure.
+// - The first NUM_SUPERBLOCKS sectors contain Superblock data structures, one
+//   per sector. Only one of them is current, and the other ones are ignored.
+//   Which one is current is determined when the partition is opened by locating
+//   the one with the lowest generation_counter.
 // - Immediately after, the ROMs' contents follow. Each ROM slot has a fixed
 //   MAX_ROM_SIZE of bytes reserved for it, even if the slot if currently empty
 //   or its stored ROM is smaller than that.
+//
+// In order to 1) tolerate power cuts during updates and 2) implement a very
+// minimal form of wear levelling, new versions of the Superblock are written
+// into a sector (within the first NUM_SUPERBLOCKS) different from the current
+// one, in a round-robin fashion.
 class ConfigurationPartition {
  public:
   struct [[gnu::packed]] RomInfo {
@@ -45,20 +74,37 @@ class ConfigurationPartition {
   const RomInfo &get_rom_info(uint slot_num) const;
   const uint8_t *get_rom_contents(uint slot_num) const;
 
+  void write_begin(uint slot_num, uint8_t name_length, const char *name);
+  void write_data(uint8_t value);
+  void write_end();
+
  private:
+  // Persists the value of superblock_contents to flash.
+  void flush_superblock_contents();
+
   // Handle to the underlying partition.
   Partition data_partition;
 
   // The Superblock contains the catalog of the stored ROMs:
   struct [[gnu::packed]] Superblock {
+    uint32_t generation_counter;  // less is newer, 0xFFFFFFFF = invalid.
     RomInfo rom_slots[16];
   };
   Superblock superblock_contents;
+  uint superblock_write_index;  // where to write the next superblock update.
+
+  struct WriteStatus {
+    uint slot_num;
+    uint32_t write_cursor;
+  };
+  std::optional<WriteStatus> write_status;
 
   // Constants defining the partition's layout:
   static_assert(sizeof(Superblock) <= FLASH_SECTOR_SIZE,
                 "The Superblock data structure does not fit in one sector");
-  static constexpr uint32_t ROM_BASE_OFFSET = FLASH_SECTOR_SIZE;
+  static constexpr uint32_t NUM_SUPERBLOCKS = 16;
+  static constexpr uint32_t ROM_BASE_OFFSET =
+      FLASH_SECTOR_SIZE * NUM_SUPERBLOCKS;
 };
 
 #endif

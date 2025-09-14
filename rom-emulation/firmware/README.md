@@ -79,9 +79,11 @@ pressed, and a new virtual disk drive will appear to be connected. Copy
 the end of the process and the Pico's on-board LED will start to blink,
 indicating that the ROM emulation software is running.
 
-After installing `build/rom-emulator-full-install.uf2` once, storing/updating
-the catalog of stored ROMs currently requires the `picotool` program and an
-helper script (but this will change in the next commits):
+The most practical way to load ROMs into flash memory is via the
+[Client protocol](#client-protocol)'s `store` command. **As an alternative**,
+after installing `build/rom-emulator-full-install.uf2`, it is also possible to
+preload the whole catalog of ROMs in bulk, with the help of the `picotool`
+program and the `generate-data-partition.py` script:
 ```shell
 # First step: Create a data partition image containing the desired ROMs.
 # Use options from --slot0 to --slotF to optionally populate each of the 16
@@ -124,3 +126,8 @@ Always available commands:
 Only if `OPERATING_MODE` is `interactive`:
 * `boot -n SLOT_ID`: equivalent to choosing to boot the ROM at `SLOT_ID` from
   the interactive menu.
+* `store -n SLOT_ID [-l "Description for the menu"] [-b] rom.bin`: stores a new
+  ROM (or replaces the existing one) at `SLOT_ID`. Unless overridden by the
+  optional `-l` argument, the ROM's filename will be shown in the boot menu as
+  the description for the ROM. The optional `-b` flag automatically boots the
+  just-stored ROM at the end of the transfer.

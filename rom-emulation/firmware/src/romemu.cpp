@@ -35,6 +35,8 @@ static constexpr uint sm_b = 1;
 static constexpr uint db_restart_core1 = 0;
 static std::atomic<uintptr_t> db_restart_core1_target_address;
 
+static std::atomic<bool> core1_started = false;
+
 // ROM, stored as (pin-mapped address) -> (PIO instructions for sm_a and sm_b)
 // in a dedicated RAM region exclusively accessed by core1 while romemu is
 // running.
@@ -197,10 +199,12 @@ static void __scratch_x("romemu_worker_in_ram") core1_doorbell_irq() {
 }
 
 [[gnu::noinline, gnu::noreturn]]
-static void core1_entry_point() {
+static void __scratch_x("romemu_worker_in_ram") core1_entry_point() {
   uint32_t irq = multicore_doorbell_irq_num(db_restart_core1);
   irq_set_exclusive_handler(irq, core1_doorbell_irq);
   irq_set_enabled(irq, true);
+
+  core1_started = true;
 
   // Start the idle task.
   core1_idle_task();
@@ -289,6 +293,15 @@ void romemu_setup() {
 
   // Start the worker function on core1, dedicated to this task.
   multicore_launch_core1(core1_entry_point);
+
+  // Wait until we are sure that core1 is running entirely out of RAM. This is
+  // necessary because, after this function returns, core0 might start a flash
+  // erase/program operation at any time, if asked to do so by the client
+  // protocol, and core1 would get a bus fault if it tried to fetch anything
+  // from flash at the same time.
+  while (!core1_started) {
+    tight_loop_contents();
+  }
 }
 
 void romemu_start() { core1_restart(core1_worker_task); }

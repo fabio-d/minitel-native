@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import binascii
+import os.path
 import random
 import struct
 import serial
@@ -12,7 +13,13 @@ PACKET_MAGIC_END = 0x6DE1
 PACKET_TYPE_EMULATOR_PING = 0
 PACKET_TYPE_EMULATOR_TRACE = 1
 PACKET_TYPE_EMULATOR_BOOT = 2
+PACKET_TYPE_EMULATOR_WRITE_BEGIN = 3
+PACKET_TYPE_EMULATOR_WRITE_DATA = 4
+PACKET_TYPE_EMULATOR_WRITE_END = 5
 PACKET_TYPE_REPLY_XOR_MASK = 0x80
+
+MAX_ROM_SIZE = 64 * 1024
+TRANSFER_STEP = 128
 
 
 # Sends a request packet and waits for the reply.
@@ -88,6 +95,48 @@ def do_boot(serial_port: serial.Serial, args: argparse.Namespace):
         exit("Boot command failed.")
 
 
+def do_store(serial_port: serial.Serial, args: argparse.Namespace):
+    # Determine the ROM name that will be displayed in the menu.
+    if args.label is not None:
+        name = args.label
+    else:
+        name = os.path.basename(args.rom_file.name)
+
+    # Read ROM binary, up to MAX_ROM_SIZE+1 so we can determine if the file is
+    # too big to be a real ROM.
+    data = b""
+    while chunk := args.rom_file.read(MAX_ROM_SIZE + 1 - len(data)):
+        data += chunk
+    if len(data) == 0 or len(data) > MAX_ROM_SIZE:
+        exit(f"Invalid ROM size: {len(data)}")
+
+    transfer_packet(
+        serial_port,
+        PACKET_TYPE_EMULATOR_WRITE_BEGIN,
+        struct.pack("<B", args.slot) + name.encode()[:126],
+    )
+
+    for i in range(0, len(data), TRANSFER_STEP):
+        percent = round(100 * i / len(data))
+        print(f"Progress: {i}/{len(data)} bytes ({percent} %)", file=sys.stderr)
+        reply = transfer_packet(
+            serial_port,
+            PACKET_TYPE_EMULATOR_WRITE_DATA,
+            data[i : i + TRANSFER_STEP],
+        )
+        if reply != b"OK":
+            exit("Write failed.")
+
+    print(f"Progress: {len(data)}/{len(data)} bytes (100 %)", file=sys.stderr)
+    reply = transfer_packet(serial_port, PACKET_TYPE_EMULATOR_WRITE_END, b"")
+    if reply != b"OK":
+        exit("Write failed.")
+    print("Store command succeeded.", file=sys.stderr)
+
+    if args.boot:
+        do_boot(serial_port, argparse.Namespace(slot=args.slot))
+
+
 # Parses the --slot argument.
 #
 # Note: the name of this function is shown in argparse's error message when the
@@ -145,6 +194,36 @@ def main():
         required=True,
     )
     parser_boot.set_defaults(func=do_boot)
+
+    parser_store = subparsers.add_parser(
+        name="store",
+        help="Stores a new ROM into flash memory.",
+    )
+    parser_store.add_argument(
+        "-n",
+        "--slot",
+        type=SLOT,
+        help="ROM slot number to store into (hex value between 0 and F).",
+        required=True,
+    )
+    parser_store.add_argument(
+        "-l",
+        "--label",
+        help="set the title displayed in the menu (default: the filename).",
+    )
+    parser_store.add_argument(
+        "-b",
+        "--boot",
+        help="boot immediately after.",
+        action="store_true",
+    )
+    parser_store.add_argument(
+        "rom_file",
+        metavar="rom.bin",
+        type=argparse.FileType("rb"),
+        help="ROM binary file.",
+    )
+    parser_store.set_defaults(func=do_store)
 
     args = parser.parse_args()
 

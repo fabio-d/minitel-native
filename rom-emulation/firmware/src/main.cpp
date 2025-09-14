@@ -41,9 +41,19 @@ static CliProtocolEncoder encoder;
 static ConfigurationPartition data_partition;
 static uint selected_boot_slot_num;
 
-static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
-                                                      const void *packet_data,
-                                                      uint packet_length) {
+// Write operations are stateful. In order to block interlacing of distinct
+// writes from different sources, which would end up reciprocally corrupting
+// their states, we only allow the most recently started write operation to
+// continue.
+static enum class PacketSource {
+  Uninitialized,
+  MagicIo,
+  Stdio,
+} write_token = PacketSource::Uninitialized;
+
+static std::pair<const uint8_t *, uint> handle_packet(
+    uint8_t packet_type, const void *packet_data, uint packet_length,
+    PacketSource packet_source) {
   switch (packet_type) {
     case CLI_PACKET_TYPE_EMULATOR_PING: {
       encoder.begin(CLI_PACKET_TYPE_EMULATOR_PING ^
@@ -80,6 +90,48 @@ static std::pair<const uint8_t *, uint> handle_packet(uint8_t packet_type,
         can_accept_boot_command = false;
       } else {
         encoder.push("BUSY", 4);
+      }
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_WRITE_BEGIN: {
+      if (packet_length < 2 || *(uint8_t *)packet_data >= 16) {
+        return {nullptr, 0};  // Malformed request: do not reply.
+      }
+
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_WRITE_BEGIN ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      uint8_t slot_num = *(const uint8_t *)packet_data;
+      const char *name = (const char *)packet_data + 1;
+      data_partition.write_begin(slot_num, packet_length - 1, name);
+      write_token = packet_source;
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_WRITE_DATA: {
+      if (packet_length == 0) {
+        return {nullptr, 0};  // Malformed request: do not reply.
+      }
+
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_WRITE_DATA ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      if (write_token == packet_source) {
+        const uint8_t *buf = (const uint8_t *)packet_data;
+        for (uint i = 0; i < packet_length; i++) {
+          data_partition.write_data(buf[i]);
+        }
+        encoder.push("OK", 2);
+      } else {
+        encoder.push("TOKEN", 5);
+      }
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_WRITE_END: {
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_WRITE_END ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      if (write_token == packet_source) {
+        data_partition.write_end();
+        encoder.push("OK", 2);
+      } else {
+        encoder.push("TOKEN", 5);
       }
       return encoder.finalize();
     }
@@ -197,10 +249,10 @@ int main() {
               break;
             }
             case CliProtocolDecoder::PushResult::PacketAvailable: {
-              auto [reply_data, reply_length] =
-                  handle_packet(magic_io_decoder.get_packet_type(),
-                                magic_io_decoder.get_packet_data(),
-                                magic_io_decoder.get_packet_length());
+              auto [reply_data, reply_length] = handle_packet(
+                  magic_io_decoder.get_packet_type(),
+                  magic_io_decoder.get_packet_data(),
+                  magic_io_decoder.get_packet_length(), PacketSource::MagicIo);
               for (uint i = 0; i < reply_length; i++) {
                 magic_io_enqueue_serial_tx(reply_data[i]);
               }
@@ -246,7 +298,7 @@ int main() {
         case CliProtocolDecoder::PushResult::PacketAvailable: {
           auto [reply_data, reply_length] = handle_packet(
               stdio_decoder.get_packet_type(), stdio_decoder.get_packet_data(),
-              stdio_decoder.get_packet_length());
+              stdio_decoder.get_packet_length(), PacketSource::Stdio);
           for (uint i = 0; i < reply_length; i++) {
             stdio_putchar_raw(reply_data[i]);
           }
