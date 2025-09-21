@@ -82,6 +82,11 @@ corresponding adapter board:
 * Philips Minitel 2 (NFZ 400) is supported by
   [`board_nfz330_nfz400`](board_nfz330_nfz400/).
 
+In alternative, if you do not have the adapter board at hand, or if you want to
+port the project to a new Minitel model (pull requests are welcome!), you might
+be able to build one yourself, as described in
+[`board_generic_diy`](board_generic_diy/).
+
 Once you have identified what adapter board to use, get a
 [Raspberry Pico 2 or Pico 2 W](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
 (**not** Pico 1) and flash it as described in the
@@ -102,3 +107,7 @@ In KiCad's PCB Editor, the footprints were annotated with
 
 The same plugin was also used to export the production files, for both PCB
 fabrication (Gerber files) and assembly (BOM and pick-and-place).
+
+> [!NOTE]
+> When submitting pull requests with new hardware design files, please use the
+> same software tools and directory layout.
