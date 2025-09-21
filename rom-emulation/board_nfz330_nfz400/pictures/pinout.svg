@@ -36,9 +36,9 @@
      inkscape:pageopacity="1"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="0.57327932"
-     inkscape:cx="263.39691"
-     inkscape:cy="474.4633"
+     inkscape:zoom="1.6214788"
+     inkscape:cx="460.69058"
+     inkscape:cy="128.89469"
      inkscape:window-width="1440"
      inkscape:window-height="761"
      inkscape:window-x="0"
@@ -52,21 +52,19 @@
      style="display:inline;fill:#008000"
      sodipodi:insensitive="true">
     <rect
-       style="display:inline;fill:#008000;stroke:#ffffff;stroke-width:2"
+       style="display:inline;fill:#008000;stroke:none;stroke-width:2"
        id="rect1"
        width="453.5311"
        height="938.46051"
        x="47.097462"
-       y="19.187855"
-       sodipodi:insensitive="true" />
+       y="19.187855" />
     <rect
        style="fill:#000000;stroke:none;stroke-width:2"
        id="rect3"
        width="66.285316"
        height="101.17233"
        x="193.62288"
-       y="36.631359"
-       sodipodi:insensitive="true" />
+       y="36.631359" />
     <rect
        style="fill:#000000;stroke:none;stroke-width:2.14958"
        id="rect3-3"
@@ -74,8 +72,7 @@
        height="116.87148"
        x="349.21613"
        y="-288.24014"
-       transform="rotate(90)"
-       sodipodi:insensitive="true" />
+       transform="rotate(90)" />
     <rect
        style="fill:#000000;stroke:none;stroke-width:2.14958"
        id="rect3-3-6"
@@ -83,8 +80,7 @@
        height="116.87148"
        x="803.21613"
        y="-288.24014"
-       transform="rotate(90)"
-       sodipodi:insensitive="true" />
+       transform="rotate(90)" />
   </g>
   <g
      inkscape:groupmode="layer"
@@ -2714,6 +2710,13 @@
      transform="translate(-69.999992,-17.564173)"
      inkscape:label="Legend"
      inkscape:groupmode="layer">
+    <rect
+       style="fill:#f2f2f2;stroke:none;stroke-width:1;stroke-opacity:1"
+       id="rect4"
+       width="119.53183"
+       height="144.78108"
+       x="629.02045"
+       y="55.939884" />
     <rect
        style="display:inline;fill:#aa8800;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect4-5-9-8-5"
