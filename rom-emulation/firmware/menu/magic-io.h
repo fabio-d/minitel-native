@@ -17,6 +17,8 @@ void magic_io_tx_byte(uint8_t c);
 
 bool magic_io_rx_byte(uint8_t* c);
 
+bool magic_io_test_and_clear_configuration_changed(void);
+
 __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t*
 magic_io_get_configuration_rom_slot(uint8_t slot_num);
 

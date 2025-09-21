@@ -109,25 +109,6 @@ int putchar(int c) {
 }
 
 static void run_main_menu(void) {
-  for (uint8_t i = 0; i < 16; i++) {
-    __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t* rom =
-        magic_io_get_configuration_rom_slot(i);
-
-    video_set_cursor(0, 2 + i);
-    if (rom->is_present) {
-      video_set_attributes(ATTR_BLACK_ON_WHITE);
-      printf(" %X ", i);
-      video_set_attributes(ATTR_WHITE_ON_BLACK);
-      putchar(' ');
-      for (uint8_t j = 0; j < rom->name_length && j < 36; j++) {
-        putchar(rom->name[j]);
-      }
-    } else {
-      video_set_attributes(ATTR_GRAY_ON_BLACK);
-      printf("(slot %X is empty)", i);
-    }
-  }
-
   video_set_attributes(ATTR_WHITE_ON_BLACK);
   video_set_cursor(0, 22);
   printf("Press ");
@@ -136,7 +117,40 @@ static void run_main_menu(void) {
   video_set_attributes(ATTR_WHITE_ON_BLACK);
   printf(" to enter serial client mode");
 
+  bool do_refresh = true;
+
   while (magic_io_get_desired_state() == MAGIC_IO_DESIRED_STATE_MAIN_MENU) {
+    if (do_refresh) {
+      for (uint8_t i = 0; i < 16; i++) {
+        __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t* rom =
+            magic_io_get_configuration_rom_slot(i);
+
+        video_set_cursor(0, 2 + i);
+        if (rom->is_present) {
+          video_set_attributes(ATTR_BLACK_ON_WHITE);
+          printf(" %X ", i);
+          video_set_attributes(ATTR_WHITE_ON_BLACK);
+          putchar(' ');
+          for (uint8_t j = 0; j < rom->name_length && j < 36; j++) {
+            putchar(rom->name[j]);
+          }
+
+          // Clear until the end of the line.
+          for (uint8_t j = rom->name_length; j < 36; j++) {
+            putchar(' ');
+          }
+        } else {
+          video_set_attributes(ATTR_GRAY_ON_BLACK);
+          uint8_t j = printf("(slot %X is empty)", i);
+
+          // Clear until the end of the line.
+          while (j++ < 40) {
+            putchar(' ');
+          }
+        }
+      }
+    }
+
     KEYBOARD_FOR_EACH_PRESSED_KEY(key) {
       switch (key) {
         case KEY_0:
@@ -192,6 +206,8 @@ static void run_main_menu(void) {
           break;
       }
     }
+
+    do_refresh = magic_io_test_and_clear_configuration_changed();
   }
 
   video_clear(0, 39, 2, 22);

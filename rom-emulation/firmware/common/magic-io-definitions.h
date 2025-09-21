@@ -56,6 +56,12 @@ typedef struct {
     volatile uint8_t serial_data_rx_lock;
     volatile uint8_t serial_data_rx_unlock;
 
+    // For being notified of configuration changes.
+    // - Read once. If zero, the configuration has not changed.
+    // - Otherwise, keep polling until it goes to 0. Then read the new
+    //   configuration.
+    volatile uint8_t configuration_changed;
+
     // For requesting a configuration block to be loaded into the read buffer.
     // - Poll the variable corresponding to the block to be read until it goes
     //   to 0.

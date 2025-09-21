@@ -55,6 +55,16 @@ bool magic_io_rx_byte(uint8_t *c) {
   return true;
 }
 
+bool magic_io_test_and_clear_configuration_changed(void) {
+  if (!MAGIC_IO->a.configuration_changed) {
+    return false;
+  }
+
+  while (MAGIC_IO->a.configuration_changed) {
+  }
+  return true;
+}
+
 __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t *
 magic_io_get_configuration_rom_slot(uint8_t slot_num) {
   while (MAGIC_IO->a.configuration_load_block_rom_slot[slot_num]) {

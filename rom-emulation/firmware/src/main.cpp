@@ -104,6 +104,13 @@ static std::pair<const uint8_t *, uint> handle_packet(
       const char *name = (const char *)packet_data + 1;
       data_partition.write_begin(slot_num, packet_length - 1, name);
       write_token = packet_source;
+
+      if (in_menu) {
+        // Refresh the menu, because write_begin erases the old contents of the
+        // slot.
+        magic_io_signal_configuration_changed();
+      }
+
       return encoder.finalize();
     }
     case CLI_PACKET_TYPE_EMULATOR_WRITE_DATA: {
@@ -129,6 +136,12 @@ static std::pair<const uint8_t *, uint> handle_packet(
                     CLI_PACKET_TYPE_REPLY_XOR_MASK);
       if (write_token == packet_source) {
         data_partition.write_end();
+
+        if (in_menu) {
+          // Refresh the menu, to reflect the new contents.
+          magic_io_signal_configuration_changed();
+        }
+
         encoder.push("OK", 2);
       } else {
         encoder.push("TOKEN", 5);

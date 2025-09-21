@@ -53,6 +53,8 @@ void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   SET_FIELD(a.serial_data_rx_lock, 1);
   SET_FIELD(a.serial_data_rx_unlock, 0);
 
+  SET_FIELD(a.configuration_changed, 0);
+
   // Initialize configuration requests.
   configuration_load_last_rom_slot = std::nullopt;
   for (uint i = 0; i < 16; i++) {
@@ -88,6 +90,10 @@ void magic_io_fill_configuration_block(const MAGIC_IO_CONFIGURATION_DATA_t &v) {
   for (uint i = 0; i < sizeof(MAGIC_IO_CONFIGURATION_DATA_t); i++) {
     SET_INDEXED_FIELD(p.configuration_loaded_block, i, v.raw[i]);
   }
+}
+
+void magic_io_signal_configuration_changed() {
+  SET_FIELD(a.configuration_changed, 1);
 }
 
 MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
@@ -199,6 +205,10 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
     case ADDRESS_OF(a.serial_data_rx_unlock): {
       SET_FIELD(a.serial_data_rx_lock, 1);
       SET_FIELD(a.serial_data_rx_unlock, 0);
+      return MagicIoSignal::None;
+    }
+    case ADDRESS_OF(a.configuration_changed): {
+      SET_FIELD(a.configuration_changed, 0);
       return MagicIoSignal::None;
     }
     case ADDRESS_OF(a.configuration_load_block_rom_slot)...(

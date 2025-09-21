@@ -50,6 +50,9 @@ void magic_io_enqueue_serial_tx(uint8_t data);
 // called in response to ConfigurationData* signals.
 void magic_io_fill_configuration_block(const MAGIC_IO_CONFIGURATION_DATA_t &v);
 
+// Signal that at least one configuration block has changed.
+void magic_io_signal_configuration_changed();
+
 // Determines what signal is being trasnmitted by the Minitel CPU by looking at
 // the most recent ROM accesses.
 //
