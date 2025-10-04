@@ -32,9 +32,9 @@ In addition to generating the custom glyphs, the script also:
 * Optionally dithers the input image (useful for photorealistic images).
 * Normalizes each tile, i.e. it assigns each tile a background and foreground
   color in a way that makes the glyph more likely to be reusable.
-* When applicable, directly replaces tiles with symbols from the mosaic caracter
-  set. Mosaic glyphs are built-in to the video chip, and thus do not count
-  towards the 300 custom glyph limit.
+* When applicable, directly replaces tiles with symbols from the mosaic
+  character set. Mosaic glyphs are built-in to the video chip, and thus do not
+  count towards the 300 custom glyph limit.
 
 ## The Minitel program
 

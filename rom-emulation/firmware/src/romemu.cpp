@@ -309,7 +309,7 @@ void romemu_start() { core1_restart(core1_worker_task); }
 void romemu_stop() { core1_restart(core1_idle_task); }
 
 void romemu_write(uint16_t address, uint8_t value) {
-  // Trasform the logical address and value into the corresponding pin-mapped
+  // Transform the logical address and value into the corresponding pin-mapped
   // permutation.
   uint16_t address_pin_values = pin_map_address(address);
   uint8_t value_pin_values = pin_map_data(value);

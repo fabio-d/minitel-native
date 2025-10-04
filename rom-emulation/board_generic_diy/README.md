@@ -2,8 +2,8 @@
 
 If you don't have the dedicated adapter PCB for your specific Minitel model at
 hand, you might be able to hand-solder one yourself, or even just connect the
-Minitel's ROM socket directly to the Pico 2's GPIO pins with jumper wires, like
-in these examples:
+Minitel's ROM socket directly to a Pico 2's GPIO pins with jumper wires, like in
+these examples:
 
 <p align="center">
 <img src="pictures/jumper_wires.jpg" width="40%" />
@@ -11,28 +11,27 @@ in these examples:
 <img src="pictures/hand_soldered.jpg" width="55%" />
 </p>
 
-This page shows how to connect the Pico without a dedicated PCB and the caveats
-to be aware of.
+This page shows how to connect a Pico 2 (or 2 W) without a dedicated PCB and the
+caveats to be aware of.
 
 # Connections
 
 ## Identifying the ROM socket's pinout
 
 Let's start by identifying the CPU of the Minitel, a 40-pin DIP chip
-identifiable by its etched label, likely to be some variation of "8032" or
-"8052". Using the notch on the top side as a reference, let's take a look at its
-pinout:
+whose etched label is some variation of "8032" or "8052". Using the notch on the
+top side as a reference, let's take a look at its pinout:
 
 <p align="center">
 <img src="pictures/cpu_pinout.svg" width="30%" />
 </p>
 
-Now, let's identify the ROM socket on the Minitel's logic board. It is likely to
-be either an unpopulated socket/connector (if the CPU is an 8052, which has an
-integrated ROM), or a socket with a ROM chip/daughterboard inserted.
+Next, identify the ROM socket on the Minitel's logic board. It is likely to be
+either an unpopulated socket/connector (if the CPU is an 8052 with an integrated
+ROM) or a socket with a ROM chip/daughterboard already inserted.
 
 Using a multimeter in continuity mode, verify that the ROM socket exposes the
-following CPU pins and write down their position:
+following CPU pins and note their positions:
 * From `P0.0/AD0` to `P0.7/AD7`
 * From `P2.0/A8` to `P2.7/A15`
 * `ALE/PROG`
@@ -45,17 +44,17 @@ Once the socket has been identified, remove the old ROM.
 
 On the Pico side, the `P0.0/AD0`-`P0.7/AD7` and `P2.0/A8`-`P2.7/A15` pins must
 be connected to GPIOs 0-15, `ALE/PROG` to GPIO 19 and `PSEN` to GPIO 20. At
-least one of the Pico's GND must be tied to the Minitel's `VSS`.
+least one of the Pico's GND pins must be tied to the Minitel's `VSS`.
 
 It is possible to connect AD0-7 and A8-15 to GPIOs 0-15 in any order, provided
 the constraints described in
 [scripts/generate-pin-map.py](../firmware/scripts/generate-pin-map.py) are met.
 
-The following table shows an example of a valid mapping. If you are planning to
-deviate from it, try building the Pico firmware with the corresponding
-`justrom:` string first (see
+The following table shows an example of a valid mapping. If you plan to deviate
+from it, try building the Pico firmware with the corresponding `justrom:` string
+first (see
 [Building the firmware and flashing a ROM](#building-the-firmware-and-flashing-a-rom)
-below), to validate the intended design. The build will fail if the constraints
+below) to validate your intended design. The build will fail if the constraints
 are not met.
 
 | Minitel CPU side | Pico 2 side |
@@ -78,35 +77,35 @@ are not met.
 | `P0.0/AD0`       | GPIO 15     |
 | `ALE/PROG`       | GPIO 19     |
 | `PSEN`           | GPIO 20     |
-| `VSS`            | GND        |
+| `VSS`            | GND         |
 
 The connection method (direct wires, breadboard or hand-soldered board) depends
 on the Minitel socket type and what kind of material is available to you.
 
 Do NOT connect the Minitel's 5 V power rail (`VCC`) to the Pico: we will power
-it over USB instead (see [Power on sequence](#power-on-sequence) for details).
+it over USB instead (see [Power-on sequence](#power-on-sequence) for details).
 
 ## Bypassing to the integrated ROM (8052 only)
 
-If the Minitel CPU is an 8052, which has an integrated ROM, it will boot:
+If the Minitel CPU is an 8052 (which has an integrated ROM), it will boot:
 * From the integrated ROM if `EA/VPP` is externally driven high.
-* From the external ROM (i.e. the Pico-emulated one, ignoring the internal one)
-  if `EA/VPP` is externally driven low.
+* From the external ROM (i.e., the Pico-emulated one) if `EA/VPP` is
+  externally driven low, ignoring the internal one.
 
 You will have to ensure that the CPU reads a low value on `EA/VPP`. If the
 Minitel model is supported by an adapter board, you might find more information
 in the corresponding adapter board's directory. If not, you are on your own: if
-`EA/VPP` connected to 5 V, you will have to disconnect it and connect GND
+`EA/VPP` is connected to 5 V, you will have to disconnect it and connect GND
 instead. Please report back if you find ways to do it in other Minitel models!
 
 # Operating instructions
 
 ## Building the firmware and flashing a ROM
 
-Write down the all the lines that are connected to the Pico's GPIOs 0-15, in
-order, separated by commas. This will be used for the `justrom:` string in the
-`cmake` command line. For instance, if the connections were made in accordance
-to the table above, the string will be
+Write down all the lines that are connected to the Pico's GPIOs 0-15, in order,
+separated by commas. This will be used for the `justrom:` string in the `cmake`
+command line. For instance, if the connections were made in accordance to the
+table above, the string will be
 `justrom:A8,A9,A10,A11,A12,A13,A14,A15,AD7,AD6,AD5,AD4,AD3,AD2,AD1,AD0`.
 
 Build the firmware with `OPERATING_MODE=embedded` and `MINITEL_MODEL` set to the
@@ -128,23 +127,22 @@ $ make
 ```
 
 Once built, connect the Pico's USB port to the computer while keeping the
-`BOOTSEL` button pressed, and a new virtual disk drive will appear to be
-connected. Copy `build/rom-emulator-embedded.uf2` into it.
+`BOOTSEL` button pressed, and a new virtual disk drive will appear. Copy
+`build/rom-emulator-embedded.uf2` into it.
 
-For details, refer to the [firmware's README](../firmware/README.md) file.
+For more details, refer to the [firmware's README](../firmware/README.md) file.
 
-## Power on sequence
+## Power-on sequence
 
 > [!CAUTION]
 > Do not power the Minitel unless the Pico is already powered from USB!
 > Similarly, do not disconnect the USB cable while the Minitel is still on.
 
 There are two reasons why the Minitel's 5 V rail (`VCC`) must NOT be connected
-to the Pico. One is that, unless an extra diode is added, the power from the USB
-bus would leak into the Minitel's logic board and back-feed into the Minitel's
-own power distribution system. The other one is that, even if we added the extra
-diode, there would be no functional advantage in letting the Minitel power the
-board.
+to the Pico. First, unless an extra diode is added, the power from the USB bus
+would leak into the Minitel's logic board and back-feed into the Minitel's own
+power distribution system. Second, even if we added the extra diode, there would
+be no functional advantage in letting the Minitel power the board.
 
 One might think that, if the Minitel powered the Pico and the Pico has been
 flashed with a ROM to emulate, the system could run standalone with our DIY
@@ -161,7 +159,8 @@ same time, the Minitel's CPU would start expecting the ROM to be ready while
 it's not yet.
 
 The voltage issue - **and this is the most important one to remember** - is that
-[the Pico's GPIO lines are only 5 V tolerant while its 3.3 V rail is powered](https://forums.raspberrypi.com/viewtopic.php?t=375118). The Minitel's CPU will drive the Pico's GPIO lines
+[the Pico's GPIO lines are only 5 V tolerant while its 3.3 V rail is powered](https://forums.raspberrypi.com/viewtopic.php?t=375118).
+The Minitel's CPU will drive the Pico's GPIO lines
 to 5 V whenever it wants to emit a high value. Therefore, it is important to
 ensure the Pico's internal 3.3 V regulation is already stable **before**
 powering on the Minitel.

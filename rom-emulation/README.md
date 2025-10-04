@@ -11,7 +11,7 @@
 > the CRTs, keep in mind that you will operate in very close proximity to
 > high-voltage parts, that may
 > **retain their charge even if unplugged from the AC for extended periods of time**
-> (even months), because CRTs act like a big capacitors.
+> (even months), because CRTs act like big capacitors.
 >
 > Most Minitels tend to have a similar internal structure: a low-voltage logic
 > board (usually below the CRT, closer to the keyboard) and a separate
@@ -22,8 +22,8 @@
 >
 > It is essential and necessary to familiarize with the
 > [**SAFETY HAZARDS** of CRTs](https://www.ifixit.com/Troubleshooting/Television/CRT+Repair+Risks+and+Safety/482706)
-> before opening the case of your Minitel, and remember that the high voltages
-> are not just in the CRT, but also in the circuits that drive it.
+> before opening the case of your Minitel, and remember that high voltages are
+> present not just in the CRT but also in the circuits that drive it.
 >
 > Always unplug the AC when getting close to any of the Minitel's boards,
 > follow all the precautions and acknowledge all the risks you are taking. This
@@ -43,21 +43,21 @@ memory.
 Specifically, the Minitel CPU is based on the
 [Harvard](https://en.wikipedia.org/wiki/Harvard_architecture) architecture. In
 this architecture, data is stored in RAM, but the instructions are stored in a
-separate memory. In the Minitels, this memory is the ROM. One of the advantages
-of this design is that it needs neither bootloaders nor large RAMs to "load" the
-program into at startup (in fact, the Minitel only has 256 bytes of RAM): the
-CPU can just fetch the instructions directly from the ROM, at every cycle, right
-when they are needed.
+separate memory. In the Minitels, this memory is the ROM. One advantage of this
+design is that it needs neither bootloaders nor large RAMs to "load" the program
+into at startup (in fact, the Minitel only has 256 bytes of RAM): the CPU can
+just fetch the instructions directly from the ROM, at every cycle, right when
+they are needed.
 
 The Minitels targeted by this project have either
 [an 8052 or an 8032 CPU](https://en.wikipedia.org/wiki/Intel_MCS-51). These two
-CPU models are identical, except for the presence of an integrated 8 KiB ROM in
-the 8052, that is not present in the 8032. Therefore, there may or may not be an
-external ROM chip containing the program memory. Luckily, it seems to be the
-case that, even when there is an 8052 CPU without an external ROM chip, the
-Minitel boards still have a functional unpopulated socket where an external ROM
-can be installed (and the capability to make the CPU to use it, in place of the
-integrated one, with a simple non-invasive hardware mod).
+CPU models are identical, except that the 8052 has an integrated 8 KiB ROM which
+is not present in the 8032. Therefore, there may or may not be an external ROM
+chip containing the program memory. Luckily, it seems to be the case that, even
+when there is an 8052 CPU without an external ROM chip, the Minitel boards still
+have a functional unpopulated socket where an external ROM can be installed (and
+the capability to make the CPU to use it, in place of the integrated one, with a
+simple non-invasive hardware mod).
 
 In conclusion, in order to replace the ROM of the Minitel:
 * If the Minitel came with an external ROM chip, just replace it with a
@@ -82,7 +82,7 @@ corresponding adapter board:
 * Philips Minitel 2 (NFZ 400) is supported by
   [`board_nfz330_nfz400`](board_nfz330_nfz400/).
 
-In alternative, if you do not have the adapter board at hand, or if you want to
+Alternatively, if you do not have the adapter board at hand, or if you want to
 port the project to a new Minitel model (pull requests are welcome!), you might
 be able to build one yourself, as described in
 [`board_generic_diy`](board_generic_diy/).

@@ -8,7 +8,7 @@
 // Internal macros for asserting that the `value` argument is:
 // - known at compile time
 // - within the given range (`min` <= `value` <= `max`)
-// If these conditions do not hold, a reference to a non-existing symbol will be
+// If these conditions do not hold, a reference to a non-existent symbol will be
 // generated and linking will fail.
 extern char TIMER___STATIC_ASSERT_BOUNDS_FAILED;  // never defined anywhere
 #define TIMER___STATIC_ASSERT_BOUNDS(value, min, max)                         \

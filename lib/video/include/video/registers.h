@@ -10,7 +10,7 @@
 // the other chip.
 
 // Text mode configuration.
-// Warning: On the EF9345, it is split among TGS and PAT. In partable programs,
+// Warning: On the EF9345, it is split among TGS and PAT. In portable programs,
 // always use both parts when constructing values for TGS and PAT!
 #if defined(VIDEO_EF9345)
 #define VIDEO_TGS_MODE_40L (0b00 << 6)

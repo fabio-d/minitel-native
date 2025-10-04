@@ -77,8 +77,8 @@ The round hole headers are only necessary for the NFZ 400.
 <img src="pictures/nfz330_installed.jpg" width="50%" />
 </p>
 
-If the Minitel originally had a ROM board inserted in the ROM slot, it is enough
-to simply replace it with the new board.
+If the Minitel originally had a ROM board inserted in the ROM slot, simply
+replace it with the new board.
 
 If the Minitel did not have a ROM board (i.e. it would normally boot from the
 8052's integrated ROM and the external ROM slot was unpopulated), it is
@@ -104,7 +104,7 @@ that would drive EA high, thus selecting the integrated ROM. By connecting it to
 GND (exposed on both adapter board's pins, see the [Pinout](#pinout) below), EA
 is driven low, thus selecting the external ROM. The reason why this cable is not
 needed in Minitels that originally came with external ROMs is that their
-resistor was soldered in the factory in a slighly different position, which
+resistor was soldered in the factory in a slightly different position, which
 makes it act as a pull-down rather than a pull-up.
 
 ### Philips Minitel 2 (NFZ 400)
@@ -121,7 +121,7 @@ makes it act as a pull-down rather than a pull-up.
 <img src="pictures/nfz400_installed.jpg" width="50%" />
 </p>
 
-Installation is straighforward: after removing the old ROM, insert the board
+Installation is straightforward: after removing the old ROM, insert the board
 in the proper orientation. Please note that this connector seems to be very
 prone to poor contact. A good solution is to slightly pre-bend the adapter
 board's pins in alternating directions:

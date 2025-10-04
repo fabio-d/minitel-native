@@ -8,7 +8,7 @@
   Displays arbitrary images by tiling them into a set of custom glyphs.
 * [`video_stream`](video_stream/):
   Plays 80x75 monochromatic videos by receiving frames at a high baud rate over
-  the p&eacute;ri-informatique port.
+  the serial port.
 
 ## Example workflow
 ```shell

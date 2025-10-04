@@ -157,7 +157,7 @@ static void load_font(__code uint8_t *font, size_t font_len) {
 }
 
 static void expand_code_index(uint16_t idx, uint8_t *b, uint8_t *c) {
-  if (idx & 0x200) {
+  if (idx & MOSAIC_FLAG) {
     *b = 0x20;  // G10 (mosaic)
     *c = idx & 0x7F;
   } else if (idx < 4) {

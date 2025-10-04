@@ -16,7 +16,7 @@ endif()
 # Set sdcc-based toolchain.
 set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_LIST_DIR}/sdcc-mcs51-toolchain.cmake)
 
-# Store the absolute path to the "lib" dirctory in MINITEL_LIB_DIR.
+# Store the absolute path to the "lib" directory in MINITEL_LIB_DIR.
 get_filename_component(MINITEL_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/.. ABSOLUTE)
 message(STATUS "Using Minitel library at ${MINITEL_LIB_DIR}")
 

@@ -37,18 +37,18 @@ $ make
 where:
 * `PICO_BOARD` is the Pico board model that will run the ROM emulation software.
 * `MINITEL_MODEL` is the Minitel model that the ROM emulator will be used with:
-  * `nfz330`: RTIC Minitel 1 in conjuction with `board_nfz330_nfz400`.
-  * `nfz400`: Philips Minitel 2 in conjuction with `board_nfz330_nfz400`.
+  * `nfz330`: RTIC Minitel 1 in conjunction with `board_nfz330_nfz400`.
+  * `nfz400`: Philips Minitel 2 in conjunction with `board_nfz330_nfz400`.
   * There is also some limited support for custom hardware boards and/or other
     Minitels: it is possible to pass `justrom:` followed by a comma-separated
     list of names of bus lanes connected to GPIOs from 0 to 15. See the
     [generate-pin-map.py](scripts/generate-pin-map.py) script for details.
-* `OPERATING_MODE` selects what level of features should be enabled:
-  * If set to `embedded`, `EMBED_ROM_FILE` should be set to path to the ROM file
-    to be emulated. No other features, in addition to just serving the ROM, will
-    be enabled.
+* `OPERATING_MODE` selects what the feature set to be enabled:
+  * If set to `embedded`, `EMBED_ROM_FILE` should be set to the path to the ROM
+    file to be emulated. No other features, in addition to just serving the ROM,
+    will be enabled.
   * If set to `interactive`, up to 16 different ROMs can be stored, and the
-    Minitel shows an interactive menu on its screen at power on. Using the
+    Minitel shows an interactive menu on its screen at power-on. Using the
     Minitel's keyboard, it is possible to either proceed to booting one of the
     stored ROMs or to enter _serial client mode_ (see
     [Client protocol](#client-protocol) below).
@@ -58,7 +58,7 @@ where:
 ### If `OPERATING_MODE` is `embedded`
 
 Connect the Pico's USB port to the computer while keeping the `BOOTSEL` button
-pressed, and a new virtual disk drive will appear to be connected. Copy
+pressed, and a new virtual disk drive will appear. Copy
 `build/rom-emulator-embedded.uf2` into it. The disk drive will disconnect at the
 end of the process and the Pico's on-board LED will start to blink, indicating
 that the ROM emulation software is running.
@@ -74,7 +74,7 @@ that the ROM emulation software is running.
 > to fully revert this process and restore factory conditions.
 
 Connect the Pico's USB port to the computer while keeping the `BOOTSEL` button
-pressed, and a new virtual disk drive will appear to be connected. Copy
+pressed, and a new virtual disk drive will appear. Copy
 `build/rom-emulator-full-install.uf2` into it. The disk drive will disconnect at
 the end of the process and the Pico's on-board LED will start to blink,
 indicating that the ROM emulation software is running.
@@ -87,7 +87,7 @@ program and the `generate-data-partition.py` script:
 ```shell
 # First step: Create a data partition image containing the desired ROMs.
 # Use options from --slot0 to --slotF to optionally populate each of the 16
-# boot options ("slots"). The slots are identified by an hex digit ("SLOT_ID"),
+# boot options ("slots"). The slots are identified by a hex digit ("SLOT_ID"),
 # that is, in order: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E and F.
 # For each ROM, it is necessary to pass the path and the title that will be
 # displayed in the menu.
