@@ -10,6 +10,8 @@ TILE_W = 2
 TILE_H = 3
 
 
+# Turns an arbitrary image into a sequence of mosaic characters (preceeded by
+# 0xFF, which delimits the beginning of a new screen).
 def prepare_image(image: Image.Image, contrast: float) -> bytes:
     image = ImageEnhance.Contrast(image.convert("L")).enhance(contrast)
 

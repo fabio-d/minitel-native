@@ -32,8 +32,8 @@ void ticks_setup(void) {
 unsigned long ticks_get() {
   unsigned long result;
 
-  // Disable interrupts while reading the current value, because it takes more
-  // than one instruction.
+  // Reading the current value takes more than one instruction. Let's disable
+  // interrupts while reading it to make the read atomic.
   __critical { result = ticks; }
 
   return result;

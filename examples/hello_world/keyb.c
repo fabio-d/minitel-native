@@ -17,6 +17,11 @@ void keyb_matrix_prepare(uint8_t x0, uint8_t y0) {
   }
 }
 
+// Note: this function reads the keyboard state using the low-level
+// board_read_keyboard() function, that does not abstract the hardware's
+// keyboard matrix layout. Programs that just need to know what keys are
+// currently pressed can use the higher-level KEYBOARD_FOR_EACH_PRESSED_KEY
+// macro instead.
 void keyb_matrix_fill(uint8_t x0, uint8_t y0) {
   const char *pressed_key = NULL;
 

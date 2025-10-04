@@ -8,11 +8,14 @@
 #include "ticks.h"
 
 void main(void) {
+  // Initialize time tracking, relying on Timer 0 interrupts.
   ticks_setup();
 
+  // Enter 40-character short mode and clear the screen.
   display_setup();
   clear_full();
 
+  // Initialize the board-specific control registers to sensible default values.
   board_controls_set_defaults();
 
   // Print "Hello World!" in double-height, double-width, flashing, white color.
@@ -33,7 +36,8 @@ void main(void) {
   draw_string(16, 23, "DDoouubbllee  WW  &&  HH", 0x37);
   draw_string(16, 24, "DDoouubbllee  WW  &&  HH", 0x37);
 
-  // Start serving interrupts.
+  // Enable interrupts globally. This starts delivering the Timer 0 interrupt
+  // that was previously configured by ticks_setup().
   EA = 1;
 
   while (true) {

@@ -56,7 +56,7 @@ class MosaicTile(Tile):
 class CustomTile(Tile):
     def __init__(self, pixels: NDArray[np.bool_]):
         super().__init__(pixels)
-        self.code = None
+        self.code = None  # later assigned by assign_codes().
 
 
 class LinkedTile:
@@ -85,8 +85,9 @@ class TileSet:
         self.tiles.append(CustomTile(pixels))
         return index
 
-    # Merges similar tiles until the number of custom tiles in the set becomes
-    # less then or equal to the given target.
+    # Merges similar tiles to reduce the total number of custom tiles. It stops
+    # when the number of custom tiles in the set becomes less then or equal to
+    # the given target.
     def merge_similar_tiles(
         self,
         max_custom_tiles: int,

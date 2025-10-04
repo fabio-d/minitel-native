@@ -27,7 +27,8 @@ different supported models.
 Connect the Minitel's serial port to the computer and launch the ROM. Then, run
 the following command on the computer:
 ```shell
-# Adjust the baud rate according to your Minitel model (see CMakeLists.txt)
+# Replace 115200 with the baud rate corresponding to your Minitel model (see
+# CMakeLists.txt).
 $ python3 scripts/send-video-frames.py \
     --serial-port /dev/ttyUSB0 \
     --baud-rate 115200 \

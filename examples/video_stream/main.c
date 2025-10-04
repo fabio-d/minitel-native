@@ -11,6 +11,7 @@ static uint8_t fifo[32];
 static uint8_t fifo_pos = 0;
 static uint8_t fifo_count = 0;
 
+// Serial interrupt handler, which simply puts each received byte into the FIFO.
 void serial_interrupt(void) __interrupt(SI0_VECTOR) {
   if (RI) {
     if (fifo_count != sizeof(fifo)) {
@@ -20,6 +21,24 @@ void serial_interrupt(void) __interrupt(SI0_VECTOR) {
   }
 }
 
+// Configures the serial port at the BAUDRATE set in the CMakeLists.txt file.
+void serial_setup(void) {
+  const uint16_t rcap2 =
+      TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(BAUDRATE));
+
+  // Set up the serial port to be timed from Timer 2 and enable reception.
+  T2CON = 0x30;
+  RCAP2H = rcap2 >> 8;
+  RCAP2L = rcap2 & 0xFF;
+  SCON = 0x50;
+  TR2 = 1;
+
+  // Enable interrupts.
+  ES = 1;
+  EA = 1;
+}
+
+// Configures the video chip in 40-character long mode.
 static void display_setup(void) {
   VIDEO->ER0 = VIDEO_CMD_NOP;
   video_wait_busy();
@@ -49,13 +68,17 @@ static void display_setup(void) {
   video_wait_busy();
 }
 
+// Fills the screen with blank mosaic characters. In particular:
+// - B=0 (holding the "C" bytes) will be filled with 0.
+// - B=1 (holding the "B" bytes) will be filled with 0x20.
+// - B=2 (holding the "A" bytes) will be filled with 0x70.
 static void display_set_mosaic() {
   for (uint8_t y = 0; y < 25; y++) {
     VIDEO->R6 = y == 0 ? 0 : (7 + y);
     VIDEO->R7 = 0;
     VIDEO->R0 = VIDEO_CMD_TLM | VIDEO_MEM_POSTINCR;
     for (uint8_t x = 0; x < 40; x++) {
-      VIDEO->R3 = 0x70;
+      VIDEO->R3 = 0x70;  // white foreground on black background
       VIDEO->R2 = 0x20;  // mosaic
       VIDEO->ER1 = 0;
       video_wait_busy();
@@ -63,24 +86,12 @@ static void display_set_mosaic() {
   }
 }
 
-void serial_setup(void) {
-  const uint16_t rcap2 =
-      TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(BAUDRATE));
-
-  T2CON = 0x30;
-  RCAP2H = rcap2 >> 8;
-  RCAP2L = rcap2 & 0xFF;
-  SCON = 0x50;
-  TR2 = 1;
-
-  // Enable interrupts.
-  ES = 1;
-  EA = 1;
-}
-
 static uint8_t cur_x = 0;
 static uint8_t cur_y = 0;
 
+// Each call to this function overwrites one byte of the screen memory's C
+// block (B=0). Blocks B (B=1) and A (B=2) will be left unaltered, with the
+// values that were previously set by display_set_mosaic().
 static void process_data(uint8_t data) {
   if (data == 0xff) {
     cur_x = cur_y = 0;
@@ -118,6 +129,7 @@ void main(void) {
     bool have_data = false;
     uint8_t data;
 
+    // Pop one byte from the FIFO, unless empty.
     __critical {
       if (fifo_count != 0) {
         data = fifo[fifo_pos];
