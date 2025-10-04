@@ -4,6 +4,8 @@
 
 * [`hello_world`](hello_world/):
   Shows a test pattern, the keyboard state and the time since boot.
+* [`image_gallery`](image_gallery/):
+  Displays arbitrary images by tiling them into a set of custom glyphs.
 
 ## Example workflow
 ```shell
