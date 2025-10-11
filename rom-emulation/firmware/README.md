@@ -79,22 +79,25 @@ pressed, and a new virtual disk drive will appear. Copy
 the end of the process and the Pico's on-board LED will start to blink,
 indicating that the ROM emulation software is running.
 
-The most practical way to load ROMs into flash memory is via the
-[Client protocol](#client-protocol)'s `store` command. **As an alternative**,
+The most practical way to load ROMs into flash memory and, for Pico 2 W boards,
+to join a wireless network is via the [Client protocol](#client-protocol)'s
+`store` and `wl-set` commands. **As an alternative**,
 after installing `build/rom-emulator-full-install.uf2`, it is also possible to
-preload the whole catalog of ROMs in bulk, with the help of the `picotool`
-program and the `generate-data-partition.py` script:
+preload the whole catalog of ROMs and the wireless settings in bulk, with the
+help of the `picotool` program and the `generate-data-partition.py` script:
 ```shell
 # First step: Create a data partition image containing the desired ROMs.
 # Use options from --slot0 to --slotF to optionally populate each of the 16
 # boot options ("slots"). The slots are identified by a hex digit ("SLOT_ID"),
 # that is, in order: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E and F.
 # For each ROM, it is necessary to pass the path and the title that will be
-# displayed in the menu.
+# displayed in the menu. If targeting a Pico 2 W board, the wireless connection
+# parameters can, optionally, be set too.
 $ scripts/generate-data-partition.py \
     --slot0 /path/to/hello_world.bin "Hello World" \
     --slot1 /path/to/another_rom.bin "Another ROM" \
     --slotF /path/to/yet_another_rom.bin "This ROM is stored in the last slot" \
+    --wl-ssid NETWORK_NAME --wl-psk PASSWORD \
     --output data_part.bin
 
 # Second step: Flash the resulting image into the data partition.
@@ -131,3 +134,8 @@ Only if `OPERATING_MODE` is `interactive`:
   optional `-l` argument, the ROM's filename will be shown in the boot menu as
   the description for the ROM. The optional `-b` flag automatically boots the
   just-stored ROM at the end of the transfer.
+
+Only if `OPERATING_MODE` is `interactive` and with a wireless Pico 2:
+* `wl-set NETWORK_NAME PASSWORD`: Set credentials of the wireless network to
+  connect to.
+* `wl-unset`: Unset credentials, disconnecting immediately.

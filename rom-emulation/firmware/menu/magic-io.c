@@ -74,3 +74,13 @@ magic_io_get_configuration_rom_slot(uint8_t slot_num) {
 
   return &MAGIC_IO->p.configuration_loaded_block.rom;
 }
+
+__code const MAGIC_IO_CONFIGURATION_DATA_NETWORK_t *
+magic_io_get_configuration_network(void) {
+  while (MAGIC_IO->a.configuration_load_block_network) {
+  }
+  while (MAGIC_IO->a.configuration_load_block_ack) {
+  }
+
+  return &MAGIC_IO->p.configuration_loaded_block.network;
+}

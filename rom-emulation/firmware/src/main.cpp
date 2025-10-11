@@ -6,6 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+#include <pico/cyw43_arch.h>
+#endif
+
 #include <algorithm>
 
 #include "cli-protocol.h"
@@ -40,6 +44,37 @@ static CliProtocolEncoder encoder;
 
 static ConfigurationPartition data_partition;
 static uint selected_boot_slot_num;
+
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+static void on_status_changed(netif *) {
+  if (in_menu) {
+    // Refresh the menu, to show the new IP address.
+    magic_io_signal_configuration_changed();
+  }
+}
+
+static void reload_wireless_config() {
+  // Stop the previous connection.
+  cyw43_arch_disable_sta_mode();
+  on_status_changed(&netif_list[0]);
+
+  const ConfigurationPartition::WirelessConfig &cfg =
+      data_partition.get_wireless_config();
+  if (!cfg.is_configured()) {
+    return;  // Nothing to do.
+  }
+
+  // Start the new connection.
+  cyw43_arch_enable_sta_mode();
+  netif_set_status_callback(&netif_list[0], on_status_changed);
+  netif_set_link_callback(&netif_list[0], on_status_changed);
+  if (cfg.is_open()) {
+    cyw43_arch_wifi_connect_async(cfg.ssid, nullptr, CYW43_AUTH_OPEN);
+  } else {
+    cyw43_arch_wifi_connect_async(cfg.ssid, cfg.psk, CYW43_AUTH_WPA2_AES_PSK);
+  }
+}
+#endif
 
 // Write operations are stateful. In order to block interlacing of distinct
 // writes from different sources, which would end up reciprocally corrupting
@@ -148,6 +183,37 @@ static std::pair<const uint8_t *, uint> handle_packet(
       }
       return encoder.finalize();
     }
+    case CLI_PACKET_TYPE_EMULATOR_WIRELESS_CONFIG: {
+      if (packet_length != 32 + 63) {
+        return {nullptr, 0};  // Malformed request: do not reply.
+      }
+
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_WIRELESS_CONFIG ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+      ConfigurationPartition::WirelessConfig new_config;
+      memset(&new_config, 0x00, sizeof(new_config));
+      memcpy(new_config.ssid, packet_data, 32);
+      memcpy(new_config.psk, (const uint8_t *)packet_data + 32, 63);
+
+      if (new_config.ssid[0] == '\0') {
+        new_config.type = ConfigurationPartition::WirelessConfig::NotConfigured;
+      } else if (new_config.psk[0] == '\0') {
+        new_config.type = ConfigurationPartition::WirelessConfig::OpenNetwork;
+      } else {
+        new_config.type = ConfigurationPartition::WirelessConfig::WpaNetwork;
+      }
+
+      write_token = packet_source;
+      data_partition.set_wireless_config(new_config);
+
+      reload_wireless_config();
+      encoder.push("OK", 2);
+#else
+      encoder.push("NOTW", 4);
+#endif
+      return encoder.finalize();
+    }
     default: {  // Unknown packet_type.
       return {0, 0};
     }
@@ -197,6 +263,13 @@ int main() {
 
   romemu_start();
   stdio_init_all();
+
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+  if (partition_ok) {
+    cyw43_wifi_pm(&cyw43_state, CYW43_PERFORMANCE_PM);
+    reload_wireless_config();
+  }
+#endif
 
   absolute_time_t next_toggle = get_absolute_time();
   bool led_on = true;
@@ -294,6 +367,25 @@ int main() {
           magic_io_fill_configuration_block(buf);
           break;
         }
+        case MagicIoSignal::ConfigurationDataNetwork: {
+          MAGIC_IO_CONFIGURATION_DATA_t buf = {};
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+          if (!data_partition.get_wireless_config().is_configured()) {
+            buf.network.status = MAGIC_IO_WIRELESS_STATUS_NOT_CONFIGURED;
+          } else if (!netif_is_link_up(&netif_list[0])) {
+            buf.network.status = MAGIC_IO_WIRELESS_STATUS_NOT_CONNECTED;
+          } else if (const ip4_addr_t *ip_addr = netif_ip4_addr(&netif_list[0]);
+                     !ip4_addr_isany(ip_addr)) {
+            buf.network.status = MAGIC_IO_WIRELESS_STATUS_CONNECTED;
+            memcpy(&buf.network.ip, ip_addr, 4);
+          } else {
+            buf.network.status = MAGIC_IO_WIRELESS_STATUS_WAITING_FOR_IP;
+          }
+#else
+          buf.network.status = MAGIC_IO_WIRELESS_STATUS_NOT_PRESENT;
+#endif
+          magic_io_fill_configuration_block(buf);
+        }
       }
     }
 
@@ -319,5 +411,9 @@ int main() {
         }
       }
     }
+
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+    cyw43_arch_poll();
+#endif
   }
 }

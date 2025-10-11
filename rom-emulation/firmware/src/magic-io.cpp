@@ -30,7 +30,7 @@ static uint8_t serial_tx_buf = 0;
 static uint8_t serial_rx_buf[CLI_PACKET_MAX_ENCODED_LENGTH];
 static uint serial_rx_buf_rpos = 0, serial_rx_buf_cnt = 0;
 
-static std::optional<uint> configuration_load_last_rom_slot;
+static std::optional<uint> configuration_load_last_address;
 
 void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   desired_state = initial_state;
@@ -56,10 +56,11 @@ void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   SET_FIELD(a.configuration_changed, 0);
 
   // Initialize configuration requests.
-  configuration_load_last_rom_slot = std::nullopt;
+  configuration_load_last_address = std::nullopt;
   for (uint i = 0; i < 16; i++) {
     SET_INDEXED_FIELD(a.configuration_load_block_rom_slot, i, 1);
   }
+  SET_FIELD(a.configuration_load_block_network, 1);
   SET_FIELD(a.configuration_load_block_ack, 0);
 
   // Write trampoline (infinite SJMP loop followed by a NOP).
@@ -211,27 +212,31 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
       SET_FIELD(a.configuration_changed, 0);
       return MagicIoSignal::None;
     }
-    case ADDRESS_OF(a.configuration_load_block_rom_slot)...(
-        ADDRESS_OF(a.configuration_load_block_rom_slot) + 15): {
-      uint slot_num =
-          (uint)(address - ADDRESS_OF(a.configuration_load_block_rom_slot));
-      if (configuration_load_last_rom_slot.has_value()) {
+    case ADDRESS_OF(a.configuration_load_block_rom_slot)... ADDRESS_OF(
+        a.configuration_load_block_network): {
+      MagicIoSignal signal;
+      if (address == ADDRESS_OF(a.configuration_load_block_network)) {
+        signal = MagicIoSignal::ConfigurationDataNetwork;
+      } else {
+        uint slot_num =
+            (uint)(address - ADDRESS_OF(a.configuration_load_block_rom_slot));
+        signal = (MagicIoSignal)((uint)MagicIoSignal::ConfigurationDataRom0 +
+                                 slot_num);
+      }
+      if (configuration_load_last_address.has_value()) {
         // This should never happen if the other side follows the protocol.
         // Let's try to recover somehow.
-        SET_INDEXED_FIELD(a.configuration_load_block_rom_slot,
-                          *configuration_load_last_rom_slot, 1);
+        romemu_write(*configuration_load_last_address, 1);
       }
-      configuration_load_last_rom_slot = slot_num;
+      configuration_load_last_address = address;
       SET_FIELD(a.configuration_load_block_ack, 1);
-      SET_INDEXED_FIELD(a.configuration_load_block_rom_slot, slot_num, 0);
-      return (MagicIoSignal)((uint)MagicIoSignal::ConfigurationDataRom0 +
-                             slot_num);
+      romemu_write(address, 0);
+      return signal;
     }
     case ADDRESS_OF(a.configuration_load_block_ack): {
-      if (configuration_load_last_rom_slot.has_value()) {
-        SET_INDEXED_FIELD(a.configuration_load_block_rom_slot,
-                          *configuration_load_last_rom_slot, 1);
-        configuration_load_last_rom_slot = std::nullopt;
+      if (configuration_load_last_address.has_value()) {
+        romemu_write(*configuration_load_last_address, 1);
+        configuration_load_last_address = std::nullopt;
       } else {
         // This branch should never be taken if the other side follows the
         // protocol.

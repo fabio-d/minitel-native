@@ -85,7 +85,7 @@ static void video_clear(uint8_t from_x, uint8_t to_x, uint8_t from_y,
   VIDEO->R2 = ' ';
   for (uint8_t y = from_y; y <= to_y; y++) {
     VIDEO->R6 = y == 0 ? 0 : (7 + y);
-    VIDEO->R7 = 0;
+    VIDEO->R7 = from_x;
     for (uint8_t x = from_x; x <= to_x; x++) {
       VIDEO->ER0 = VIDEO_CMD_TSM | VIDEO_MEM_POSTINCR;
       video_wait_busy();
@@ -121,6 +121,32 @@ static void run_main_menu(void) {
 
   while (magic_io_get_desired_state() == MAGIC_IO_DESIRED_STATE_MAIN_MENU) {
     if (do_refresh) {
+      __code const MAGIC_IO_CONFIGURATION_DATA_NETWORK_t* network =
+          magic_io_get_configuration_network();
+      video_set_attributes(ATTR_WHITE_ON_BLACK);
+      video_set_cursor(25, 0);
+      int n = 0;
+      switch (network->status) {
+        case MAGIC_IO_WIRELESS_STATUS_NOT_PRESENT:
+          break;  // Not a wireless Pico, don't show any message.
+        case MAGIC_IO_WIRELESS_STATUS_NOT_CONFIGURED:
+          n = printf("No wireless cfg");
+          break;
+        case MAGIC_IO_WIRELESS_STATUS_NOT_CONNECTED:
+          n = printf("Wireless discon");
+          break;
+        case MAGIC_IO_WIRELESS_STATUS_WAITING_FOR_IP:
+          n = printf("Getting IP");
+          break;
+        case MAGIC_IO_WIRELESS_STATUS_CONNECTED:
+          n = printf("%u.%u.%u.%u", network->ip[0], network->ip[1],
+                     network->ip[2], network->ip[3]);
+          break;
+      }
+      while (n++ != 15) {  // Clear until the end of the line.
+        putchar(' ');
+      }
+
       for (uint8_t i = 0; i < 16; i++) {
         __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t* rom =
             magic_io_get_configuration_rom_slot(i);
@@ -210,7 +236,8 @@ static void run_main_menu(void) {
     do_refresh = magic_io_test_and_clear_configuration_changed();
   }
 
-  video_clear(0, 39, 2, 22);
+  video_clear(25, 39, 0, 0);  // Network status
+  video_clear(0, 39, 2, 22);  // Available commands
 }
 
 static void run_boot_trampoline(void) {

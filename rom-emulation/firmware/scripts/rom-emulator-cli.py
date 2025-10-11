@@ -16,6 +16,7 @@ PACKET_TYPE_EMULATOR_BOOT = 2
 PACKET_TYPE_EMULATOR_WRITE_BEGIN = 3
 PACKET_TYPE_EMULATOR_WRITE_DATA = 4
 PACKET_TYPE_EMULATOR_WRITE_END = 5
+PACKET_TYPE_EMULATOR_WIRELESS_CONFIG = 6
 PACKET_TYPE_REPLY_XOR_MASK = 0x80
 
 MAX_ROM_SIZE = 64 * 1024
@@ -137,6 +138,37 @@ def do_store(serial_port: serial.Serial, args: argparse.Namespace):
         do_boot(serial_port, argparse.Namespace(slot=args.slot))
 
 
+def do_wl_set(serial_port: serial.Serial, args: argparse.Namespace):
+    ssid = args.ssid.encode("utf-8")
+    psk = args.psk.encode("utf-8")
+    if not (0 < len(ssid) <= 32):
+        exit("Wireless SSID has an invalid length")
+    if len(psk) != 0:  # open networks need no password (i.e. empty string)
+        if not (8 <= len(psk) <= 63):
+            exit("Wireless password has an invalid length")
+    reply = transfer_packet(
+        serial_port,
+        PACKET_TYPE_EMULATOR_WIRELESS_CONFIG,
+        ssid.ljust(32, b"\0") + psk.ljust(63, b"\0"),
+    )
+    if reply == b"OK":
+        print("Wireless configuration succeeded.", file=sys.stderr)
+    else:
+        exit("Wireless is not supported by the target.")
+
+
+def do_wl_unset(serial_port: serial.Serial, args: argparse.Namespace):
+    reply = transfer_packet(
+        serial_port,
+        PACKET_TYPE_EMULATOR_WIRELESS_CONFIG,
+        b"\0" * (32 + 63),
+    )
+    if reply == b"OK":
+        print("Wireless configuration succeeded.", file=sys.stderr)
+    else:
+        exit("Wireless is not supported by the target.")
+
+
 # Parses the --slot argument.
 #
 # Note: the name of this function is shown in argparse's error message when the
@@ -224,6 +256,28 @@ def main():
         help="ROM binary file.",
     )
     parser_store.set_defaults(func=do_store)
+
+    parser_wl_set = subparsers.add_parser(
+        name="wl-set",
+        help="Configures and enables the wireless client interface.",
+    )
+    parser_wl_set.add_argument(
+        "ssid",
+        metavar="NETWORK_NAME",
+        help="Wireless network name to connect to",
+    )
+    parser_wl_set.add_argument(
+        "psk",
+        metavar="PASSWORD",
+        help="Wireless network password (empty string for open networks)",
+    )
+    parser_wl_set.set_defaults(func=do_wl_set)
+
+    parser_wl_unset = subparsers.add_parser(
+        name="wl-unset",
+        help="Disables the wireless client interface.",
+    )
+    parser_wl_unset.set_defaults(func=do_wl_unset)
 
     args = parser.parse_args()
 

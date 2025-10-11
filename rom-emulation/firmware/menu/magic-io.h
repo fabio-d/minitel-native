@@ -22,4 +22,7 @@ bool magic_io_test_and_clear_configuration_changed(void);
 __code const MAGIC_IO_CONFIGURATION_DATA_ROM_t*
 magic_io_get_configuration_rom_slot(uint8_t slot_num);
 
+__code const MAGIC_IO_CONFIGURATION_DATA_NETWORK_t*
+magic_io_get_configuration_network(void);
+
 #endif

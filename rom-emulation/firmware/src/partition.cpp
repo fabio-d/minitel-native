@@ -101,13 +101,13 @@ bool Partition::validate_sector_offset(uint32_t sector_offset) {
 ConfigurationPartition::ConfigurationPartition() {}
 
 bool ConfigurationPartition::open() {
-  if (!data_partition.open_with_family_id(DATA_FAMILY_ID)) {
-    return false;
-  }
-
   // Initialize our in-memory representation of the superblock to an empty one.
   memset(&superblock_contents, 0xFF, sizeof(Superblock));
   superblock_write_index = 0;
+
+  if (!data_partition.open_with_family_id(DATA_FAMILY_ID)) {
+    return false;
+  }
 
   // Load the one with the lowest generation_counter.
   // Note: the candidate's generation_counter must be strictly lower than
@@ -212,4 +212,17 @@ void ConfigurationPartition::write_end() {
 
     flush_superblock_contents();
   }
+}
+
+void ConfigurationPartition::set_wireless_config(const WirelessConfig &cfg) {
+  superblock_contents.wireless = cfg;
+
+  // We are about to clobber the buffer, so abort any ongoing flash operation.
+  write_status = std::nullopt;
+  flush_superblock_contents();
+}
+
+const ConfigurationPartition::WirelessConfig &
+ConfigurationPartition::get_wireless_config() const {
+  return superblock_contents.wireless;
 }

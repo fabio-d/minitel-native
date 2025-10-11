@@ -29,6 +29,7 @@ enum class MagicIoSignal {
   ConfigurationDataRom0,
   // ... all the possible values in between ...
   ConfigurationDataRom15 = ConfigurationDataRom0 + 15,
+  ConfigurationDataNetwork,
 
   // Serial data received by the Minitel CPU and forwarded to the Pico.
   SerialRx00,

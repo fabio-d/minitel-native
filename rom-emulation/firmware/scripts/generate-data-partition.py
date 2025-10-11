@@ -22,6 +22,18 @@ def main():
         )
 
     parser.add_argument(
+        "--wl-ssid",
+        metavar="NETWORK",
+        help="Wireless network name to connect to",
+    )
+
+    parser.add_argument(
+        "--wl-psk",
+        metavar="PASSWORD",
+        help="Wireless network password (empty string for open networks)",
+    )
+
+    parser.add_argument(
         "--output",
         metavar="PATH",
         help="Output path for the resulting data partition image",
@@ -29,6 +41,24 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.wl_ssid is not None:
+        wl_ssid = args.wl_ssid.encode("utf-8")
+        if not (0 < len(wl_ssid) <= 32):
+            parser.error("--wl-ssid has an invalid length")
+        if args.wl_psk is None:
+            parser.error("--wl-ssid requires --wl-psk")
+        wl_psk = args.wl_psk.encode("utf-8")
+        if len(wl_psk) == 0:
+            wl_type = 0  # open network
+        else:
+            if not (8 <= len(wl_psk) <= 63):
+                parser.error("--wl-psk has an invalid length")
+            wl_type = 1  # WPA network
+    else:
+        wl_ssid = b""
+        wl_psk = b""
+        wl_type = 0xFF  # not configured
 
     # Load the requested ROM files.
     roms = []
@@ -57,6 +87,7 @@ def main():
                     name.encode(),  # TODO: encode nonstandard characters too
                 )
             )
+        fp.write(struct.pack("<B32sx63sx", wl_type, wl_ssid, wl_psk))
 
         # Ensure all the remaining superblocks are filled with 0xFF to
         # invalidate them.

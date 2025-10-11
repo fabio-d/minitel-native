@@ -66,6 +66,20 @@ class ConfigurationPartition {
     inline bool is_present() const { return size != UINT32_MAX; }
   };
 
+  struct [[gnu::packed]] WirelessConfig {
+    enum : uint8_t {
+      OpenNetwork = 0,
+      WpaNetwork = 1,
+      NotConfigured = 0xFF,
+    } type;
+
+    char ssid[32 + 1];  // if set, NUL-terminated
+    char psk[63 + 1];   // if set, NUL-terminated
+
+    inline bool is_configured() const { return type != NotConfigured; }
+    inline bool is_open() const { return type == OpenNetwork; }
+  };
+
   ConfigurationPartition();
 
   // Locates and reads the current configuration.
@@ -78,6 +92,9 @@ class ConfigurationPartition {
   void write_data(uint8_t value);
   void write_end();
 
+  void set_wireless_config(const WirelessConfig &cfg);
+  const WirelessConfig &get_wireless_config() const;
+
  private:
   // Persists the value of superblock_contents to flash.
   void flush_superblock_contents();
@@ -89,6 +106,7 @@ class ConfigurationPartition {
   struct [[gnu::packed]] Superblock {
     uint32_t generation_counter;  // less is newer, 0xFFFFFFFF = invalid.
     RomInfo rom_slots[16];
+    WirelessConfig wireless;
   };
   Superblock superblock_contents;
   uint superblock_write_index;  // where to write the next superblock update.

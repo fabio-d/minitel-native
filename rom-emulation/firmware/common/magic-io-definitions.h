@@ -12,15 +12,29 @@ typedef enum {
   MAGIC_IO_DESIRED_STATE_CLIENT_MODE,       // Serial tunnel.
 } MAGIC_IO_DESIRED_STATE_t;
 
+// Wireless network state.
+typedef enum {
+  MAGIC_IO_WIRELESS_STATUS_NOT_PRESENT,
+  MAGIC_IO_WIRELESS_STATUS_NOT_CONFIGURED,
+  MAGIC_IO_WIRELESS_STATUS_NOT_CONNECTED,
+  MAGIC_IO_WIRELESS_STATUS_WAITING_FOR_IP,
+  MAGIC_IO_WIRELESS_STATUS_CONNECTED,
+} MAGIC_IO_WIRELESS_STATUS_t;
+
 // Configuration data provided by the Pico.
 typedef struct {
   uint8_t is_present;  // 0 or 1
   uint8_t name_length;
   char name[126];
 } MAGIC_IO_CONFIGURATION_DATA_ROM_t;
+typedef struct {
+  uint8_t status;  // actual type MAGIC_IO_WIRELESS_STATUS_t.
+  uint8_t ip[4];   // IPv4 octets
+} MAGIC_IO_CONFIGURATION_DATA_NETWORK_t;
 typedef union {
   uint8_t raw[128];
   MAGIC_IO_CONFIGURATION_DATA_ROM_t rom;
+  MAGIC_IO_CONFIGURATION_DATA_NETWORK_t network;
 } MAGIC_IO_CONFIGURATION_DATA_t;
 
 typedef struct {
@@ -68,6 +82,7 @@ typedef struct {
     // - Poll configuration_load_block_ack until it goes to zero.
     // - Read the buffer (configuration_loaded_block).
     volatile uint8_t configuration_load_block_rom_slot[16];
+    volatile uint8_t configuration_load_block_network;
     volatile uint8_t configuration_load_block_ack;
   } a;
 

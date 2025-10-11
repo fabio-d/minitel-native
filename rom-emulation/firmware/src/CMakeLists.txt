@@ -25,6 +25,7 @@ target_compile_definitions(rom-emulator PRIVATE
 )
 
 target_include_directories(rom-emulator PRIVATE
+  .
   ../common
 )
 
@@ -37,12 +38,6 @@ target_link_libraries(rom-emulator PRIVATE
   pico_multicore
   pico_stdlib
 )
-
-if(PICO_CYW43_SUPPORTED)
-  target_link_libraries(rom-emulator PRIVATE
-    pico_cyw43_arch_none
-  )
-endif()
 
 # Generate the pin map.
 add_custom_command(
@@ -113,6 +108,17 @@ if(ROM_EMULATOR_IS_INTERACTIVE)
     OUTPUT_NAME rom-emulator-update-only
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
   )
+
+  if(PICO_CYW43_SUPPORTED)
+    target_compile_definitions(rom-emulator PRIVATE
+      "-DROM_EMULATOR_WITH_WIRELESS=1"
+    )
+    target_link_libraries(rom-emulator PRIVATE pico_cyw43_arch_lwip_poll)
+  else()
+    target_compile_definitions(rom-emulator PRIVATE
+      "-DROM_EMULATOR_WITH_WIRELESS=0"
+    )
+  endif()
 else()
   # Embedded mode is simpler and does not involve partitioning: just store the
   # regular output UF2 file in the top-level build directory, and call it
@@ -125,6 +131,15 @@ else()
   # Make it absolute so that, if flashed over an interactive-mode installation,
   # the old partition table is automatically erased.
   pico_set_uf2_family(rom-emulator absolute)
+
+  if(PICO_CYW43_SUPPORTED)
+    target_link_libraries(rom-emulator PRIVATE pico_cyw43_arch_none)
+  endif()
+
+  # We never enable wireless in embedded mode.
+  target_compile_definitions(rom-emulator PRIVATE
+    "-DROM_EMULATOR_WITH_WIRELESS=0"
+  )
 endif()
 
 # Convert the embedded ROM binary into a C array.
