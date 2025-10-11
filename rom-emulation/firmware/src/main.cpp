@@ -7,10 +7,12 @@
 #include <string.h>
 
 #if ROM_EMULATOR_WITH_WIRELESS == 1
+#include <lwip/tcp.h>
 #include <pico/cyw43_arch.h>
 #endif
 
 #include <algorithm>
+#include <memory>
 
 #include "cli-protocol.h"
 #include "embedded-rom-array.h"
@@ -40,6 +42,7 @@ static uint16_t trace_buf[TRACE_MAX_SAMPLES];
 
 static CliProtocolDecoder magic_io_decoder;
 static CliProtocolDecoder stdio_decoder;
+static CliProtocolDecoder tcp_decoder;
 static CliProtocolEncoder encoder;
 
 static ConfigurationPartition data_partition;
@@ -84,6 +87,7 @@ static enum class PacketSource {
   Uninitialized,
   MagicIo,
   Stdio,
+  TcpClient,
 } write_token = PacketSource::Uninitialized;
 
 static std::pair<const uint8_t *, uint> handle_packet(
@@ -220,6 +224,102 @@ static std::pair<const uint8_t *, uint> handle_packet(
   }
 }
 
+#if ROM_EMULATOR_WITH_WIRELESS == 1
+class TcpClient {
+ public:
+  explicit TcpClient(tcp_pcb *pcb, CliProtocolDecoder *decoder)
+      : pcb_(pcb), decoder_(decoder), closed_(false) {
+    tcp_nagle_disable(pcb_);
+
+    tcp_arg(pcb_, this);
+    tcp_recv(pcb_,
+             [](void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
+                err_t err) -> err_t {
+               assert(err == ERR_OK);
+
+               TcpClient *me = (TcpClient *)arg;
+
+               bool keep_open = me->on_recv(p);
+               if (p != nullptr) {
+                 tcp_recved(me->pcb_, p->tot_len);
+                 pbuf_free(p);
+               }
+
+               if (keep_open) {
+                 return ERR_OK;
+               } else {
+                 return me->close();
+               }
+             });
+  }
+
+  ~TcpClient() { close(); }
+
+ private:
+  err_t close() {
+    if (closed_) {
+      return ERR_OK;
+    } else {
+      closed_ = true;
+      tcp_abort(pcb_);
+      return ERR_ABRT;
+    }
+  }
+
+  bool on_recv(pbuf *p) {
+    if (closed_ || p == nullptr) {
+      return false;
+    }
+
+    uint8_t rx_buf[16];
+    for (uint16_t pos = 0; pos < p->tot_len; pos += sizeof(rx_buf)) {
+      uint16_t len = pbuf_copy_partial(p, rx_buf, sizeof(rx_buf), pos);
+      for (uint16_t i = 0; i < len; i++) {
+        switch (tcp_decoder.push(rx_buf[i])) {
+          case CliProtocolDecoder::PushResult::Idle: {
+            break;
+          }
+          case CliProtocolDecoder::PushResult::Error: {
+            return false;
+          }
+          case CliProtocolDecoder::PushResult::PacketAvailable: {
+            auto [reply_data, reply_length] = handle_packet(
+                tcp_decoder.get_packet_type(), tcp_decoder.get_packet_data(),
+                tcp_decoder.get_packet_length(), PacketSource::TcpClient);
+            tcp_write(pcb_, reply_data, reply_length, TCP_WRITE_FLAG_COPY);
+            tcp_output(pcb_);
+            break;
+          }
+        }
+      }
+    }
+
+    return true;
+  }
+
+  tcp_pcb *pcb_;
+  CliProtocolDecoder *decoder_;
+  bool closed_;
+};
+
+err_t on_tcp_client_accepted(void *arg, tcp_pcb *pcb, err_t err) {
+  assert(pcb != nullptr);
+  assert(err == ERR_OK);
+
+  // There is only one CliProtocolDecoder instance (statically allocated)
+  // dedicated to TCP clients. Let's be sure that there is never more than one
+  // TCP client connected at the same time.
+  static std::unique_ptr<TcpClient> curr_client;
+  curr_client.reset();
+
+  // Reset the decoder state.
+  tcp_decoder.reset();
+
+  curr_client = std::make_unique<TcpClient>(pcb, &tcp_decoder);
+  return ERR_OK;
+}
+#endif
+
 static void load_rom_from_data_partition() {
   const ConfigurationPartition::RomInfo &info =
       data_partition.get_rom_info(selected_boot_slot_num);
@@ -268,6 +368,14 @@ int main() {
   if (partition_ok) {
     cyw43_wifi_pm(&cyw43_state, CYW43_PERFORMANCE_PM);
     reload_wireless_config();
+
+    // Start listening for TCP connections.
+    tcp_pcb *pcb = tcp_new_ip_type(IPADDR_TYPE_ANY);
+    assert(pcb != nullptr);
+    tcp_bind(pcb, IP4_ADDR_ANY, CLI_PROTOCOL_TCP_PORT);
+    pcb = tcp_listen(pcb);
+    assert(pcb != nullptr);
+    tcp_accept(pcb, on_tcp_client_accepted);
   }
 #endif
 

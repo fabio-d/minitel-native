@@ -14,7 +14,8 @@ Software and hardware tools to run native programs on the
 ## Usage instructions
 
 * Insert the [ROM emulation board](rom-emulation/) in the Minitel's ROM socket.
-* Load one or more ROMs, directly through the Minitel's serial port, using
+* Load one or more ROMs, directly through the Minitel's serial port (or over a
+  wireless network), using
   [`rom-emulator-cli.py`](rom-emulation/firmware/scripts/rom-emulator-cli.py).
 * Select the one to be started at power-on, on the Minitel itself.
 * Try out the [example programs](examples/) and [create your own](lib/)!

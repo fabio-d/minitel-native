@@ -7,6 +7,8 @@ import struct
 import serial
 import sys
 
+PROTOCOL_TCP_PORT = 3759
+
 PACKET_MAGIC_BEGIN = 0x5CA7
 PACKET_MAGIC_END = 0x6DE1
 
@@ -183,10 +185,11 @@ def SLOT(text: str) -> int:
 def main():
     parser = argparse.ArgumentParser(
         prog="rom-emulator-cli",
-        description="Interact with the Minitel ROM emulator over serial port.",
+        description="Interact with the Minitel ROM emulator over serial port or TCP.",
     )
 
-    parser.add_argument(
+    serial_group = parser.add_mutually_exclusive_group(required=True)
+    serial_group.add_argument(
         "-s",
         "--serial",
         metavar="PORT_NAME",
@@ -194,7 +197,12 @@ def main():
             "PySerial port name for connecting to the ROM emulator. Refer to "
             "PySerial's serial.serial_for_url() documentation for the format."
         ),
-        required=True,
+    )
+    serial_group.add_argument(
+        "-t",
+        "--tcp-host",
+        metavar="HOST",
+        help=f'shortcut for PySerial URL "socket://HOST:{PROTOCOL_TCP_PORT}".',
     )
 
     subparsers = parser.add_subparsers(
@@ -282,6 +290,8 @@ def main():
     args = parser.parse_args()
 
     # Initialize the link to the ROM emulator.
+    if args.tcp_host is not None:
+        args.serial = f"socket://{args.tcp_host}:{PROTOCOL_TCP_PORT}"
     serial_port = serial.serial_for_url(
         args.serial,
         baudrate=2400,

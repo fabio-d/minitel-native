@@ -5,6 +5,8 @@
 
 #include <utility>
 
+constexpr uint16_t CLI_PROTOCOL_TCP_PORT = 3759;
+
 constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_PING = 0;
 constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_TRACE = 1;
 constexpr uint8_t CLI_PACKET_TYPE_EMULATOR_BOOT = 2;

@@ -51,7 +51,9 @@ where:
     Minitel shows an interactive menu on its screen at power-on. Using the
     Minitel's keyboard, it is possible to either proceed to booting one of the
     stored ROMs or to enter _serial client mode_ (see
-    [Client protocol](#client-protocol) below).
+    [Client protocol](#client-protocol) below). If building for a wireless Pico
+    (i.e. `PICO_BOARD` is `pico2_w`), the client protocol can also be exposed as
+    a TCP server after joining a Wireless network.
 
 ## Installation
 
@@ -121,6 +123,9 @@ It supports the following connection channels:
   select _serial client mode_ in the menu first, and then use
   `rom-emulator-cli.py -s /dev/ttyUSB0` on the computer, provided the Minitel is
   connected as described [here](https://pila.fr/wordpress/?p=361)).
+* TCP connection (Pico 2 W in `interactive` mode only; usage:
+  `rom-emulator-cli.py -t 192.168.1.123`). Note that, when connected to a
+  Wireless network, the actual IP is displayed on the Minitel's screen.
 
 Always available commands:
 * `ping`: verifies that the Pico program is responding.
