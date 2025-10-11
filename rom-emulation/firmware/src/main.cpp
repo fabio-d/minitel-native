@@ -46,6 +46,7 @@ static CliProtocolDecoder tcp_decoder;
 static CliProtocolEncoder encoder;
 
 static ConfigurationPartition data_partition;
+static OtaPartition ota_partition;
 static uint selected_boot_slot_num;
 
 #if ROM_EMULATOR_WITH_WIRELESS == 1
@@ -83,12 +84,14 @@ static void reload_wireless_config() {
 // writes from different sources, which would end up reciprocally corrupting
 // their states, we only allow the most recently started write operation to
 // continue.
-static enum class PacketSource {
+enum class PacketSource {
   Uninitialized,
   MagicIo,
   Stdio,
   TcpClient,
-} write_token = PacketSource::Uninitialized;
+};
+static PacketSource write_token = PacketSource::Uninitialized;
+static PacketSource ota_token = PacketSource::Uninitialized;
 
 static std::pair<const uint8_t *, uint> handle_packet(
     uint8_t packet_type, const void *packet_data, uint packet_length,
@@ -216,6 +219,42 @@ static std::pair<const uint8_t *, uint> handle_packet(
 #else
       encoder.push("NOTW", 4);
 #endif
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_OTA_BEGIN: {
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_OTA_BEGIN ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      ota_partition.ota_begin();
+      ota_token = packet_source;
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_OTA_DATA: {
+      if (packet_length == 0) {
+        return {nullptr, 0};  // Malformed request: do not reply.
+      }
+
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_OTA_DATA ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      if (ota_token == packet_source) {
+        const uint8_t *buf = (const uint8_t *)packet_data;
+        for (uint i = 0; i < packet_length; i++) {
+          ota_partition.ota_data(buf[i]);
+        }
+        encoder.push("OK", 2);
+      } else {
+        encoder.push("TOKEN", 5);
+      }
+      return encoder.finalize();
+    }
+    case CLI_PACKET_TYPE_EMULATOR_OTA_END: {
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_OTA_END ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      if (ota_token == packet_source) {
+        ota_partition.ota_end();
+        encoder.push("OK", 2);
+      } else {
+        encoder.push("TOKEN", 5);
+      }
       return encoder.finalize();
     }
     default: {  // Unknown packet_type.
@@ -352,8 +391,8 @@ int main() {
   }
 
 #if ROM_EMULATOR_IS_INTERACTIVE == 1
-  // Locate and open the data partition.
-  bool partition_ok = data_partition.open();
+  // Locate and open the partitions.
+  bool partition_ok = data_partition.open() && ota_partition.open();
 
   magic_io_prepare_rom(partition_ok ? MAGIC_IO_DESIRED_STATE_MAIN_MENU
                                     : MAGIC_IO_DESIRED_STATE_PARTITION_ERROR);

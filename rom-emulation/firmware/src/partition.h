@@ -15,6 +15,15 @@ class Partition {
   // given family ID to discover the boundaries of the partition.
   bool open_with_family_id(uint32_t family_id);
 
+  // Given a partition index, opens the other partition in a A/B configuration.
+  bool open_ab_other(uint partition_num);
+
+  // Get the index of the detected partition.
+  uint get_index() const;
+
+  // Get the size of the detected partition.
+  uint get_size() const;
+
   // Obtains a pointer to the memory-mapped flash sector.
   const void *get_contents(uint32_t offset) const;
 
@@ -39,6 +48,7 @@ class Partition {
   bool validate_sector_offset(uint32_t sector_offset);
 
   uint32_t base_offset, size;
+  uint index;
 };
 
 // Mediates access to the data partition.
@@ -123,6 +133,34 @@ class ConfigurationPartition {
   static constexpr uint32_t NUM_SUPERBLOCKS = 16;
   static constexpr uint32_t ROM_BASE_OFFSET =
       FLASH_SECTOR_SIZE * NUM_SUPERBLOCKS;
+};
+
+// Mediates access to the A/B partitions containing the Pico's own firmware.
+//
+// The A/B partitioning scheme makes it possible to write the firmware for the
+// next boot into one partition, while the current firmware is still running
+// from the other one.
+class OtaPartition {
+ public:
+  OtaPartition();
+
+  // Locates the current and next partitions.
+  bool open();
+
+  void ota_begin();
+  void ota_data(uint8_t value);
+  void ota_end();
+
+ private:
+  void invalidate_current_header();
+
+  //  Handle to the underlying partitions.
+  Partition current_partition, next_partition;
+
+  struct WriteStatus {
+    uint32_t write_cursor;
+  };
+  std::optional<WriteStatus> write_status;
 };
 
 #endif

@@ -19,6 +19,9 @@ PACKET_TYPE_EMULATOR_WRITE_BEGIN = 3
 PACKET_TYPE_EMULATOR_WRITE_DATA = 4
 PACKET_TYPE_EMULATOR_WRITE_END = 5
 PACKET_TYPE_EMULATOR_WIRELESS_CONFIG = 6
+PACKET_TYPE_EMULATOR_OTA_BEGIN = 7
+PACKET_TYPE_EMULATOR_OTA_DATA = 8
+PACKET_TYPE_EMULATOR_OTA_END = 9
 PACKET_TYPE_REPLY_XOR_MASK = 0x80
 
 MAX_ROM_SIZE = 64 * 1024
@@ -171,6 +174,73 @@ def do_wl_unset(serial_port: serial.Serial, args: argparse.Namespace):
         exit("Wireless is not supported by the target.")
 
 
+def do_ota(serial_port: serial.Serial, args: argparse.Namespace):
+    data = bytearray()  # firmware image contents
+    blocks_counter = 0
+    blocks_total = None
+
+    while block_data := args.firmware_file.read(512):
+        (
+            magic_start_0,
+            magic_start_1,
+            flags,
+            target_addr,
+            payload_size,
+            block_number,
+            total_blocks,
+            file_size,
+            payload,
+            magic_end,
+        ) = struct.unpack("<IIIIIIII476sI", block_data)
+
+        if (
+            magic_start_0,
+            magic_start_1,
+            magic_end,
+        ) != (
+            0x0A324655,
+            0x9E5D5157,
+            0x0AB16F30,
+        ):
+            exit("Invalid UF2 file")
+
+        if (flags & 0x2000) == 0 or file_size != 0xE48BFF59:
+            continue  # Skip blocks whose family-id is not "rp2350-arm-s".
+
+        if blocks_total is None:  # Get blocks_total from the first valid block.
+            blocks_total = total_blocks
+
+        if block_number != blocks_counter or block_number >= blocks_total:
+            exit("Invalid UF2 block number detected")
+
+        image_offset = target_addr - 0x10000000
+        if image_offset != len(data):
+            raise NotImplementedError("Support for gaps in the firmware image")
+
+        data.extend(payload[:payload_size])
+        blocks_counter += 1
+
+    transfer_packet(serial_port, PACKET_TYPE_EMULATOR_OTA_BEGIN, b"")
+
+    for i in range(0, len(data), TRANSFER_STEP):
+        percent = round(100 * i / len(data))
+        print(f"Progress: {i}/{len(data)} bytes ({percent} %)", file=sys.stderr)
+        reply = transfer_packet(
+            serial_port,
+            PACKET_TYPE_EMULATOR_OTA_DATA,
+            data[i : i + TRANSFER_STEP],
+        )
+        if reply != b"OK":
+            exit("OTA failed.")
+
+    print(f"Progress: {len(data)}/{len(data)} bytes (100 %)", file=sys.stderr)
+    reply = transfer_packet(serial_port, PACKET_TYPE_EMULATOR_OTA_END, b"")
+    if reply != b"OK":
+        exit("OTA failed.")
+    print("OTA command succeeded.", file=sys.stderr)
+    print("The new firmware will be used at the next boot.", file=sys.stderr)
+
+
 # Parses the --slot argument.
 #
 # Note: the name of this function is shown in argparse's error message when the
@@ -286,6 +356,18 @@ def main():
         help="Disables the wireless client interface.",
     )
     parser_wl_unset.set_defaults(func=do_wl_unset)
+
+    parser_ota = subparsers.add_parser(
+        name="ota",
+        help="Updates the ROM emulator's own firmware.",
+    )
+    parser_ota.add_argument(
+        "firmware_file",
+        metavar="rom-emulator-update-only.uf2",
+        type=argparse.FileType("rb"),
+        help="RP2350 firmware UF2 file.",
+    )
+    parser_ota.set_defaults(func=do_ota)
 
     args = parser.parse_args()
 

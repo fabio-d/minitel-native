@@ -139,6 +139,8 @@ Only if `OPERATING_MODE` is `interactive`:
   optional `-l` argument, the ROM's filename will be shown in the boot menu as
   the description for the ROM. The optional `-b` flag automatically boots the
   just-stored ROM at the end of the transfer.
+* `ota rom-emulator-update-only.uf2`: stores a new Pico 2 firmware, that will be
+  started at the next boot in place of the current one.
 
 Only if `OPERATING_MODE` is `interactive` and with a wireless Pico 2:
 * `wl-set NETWORK_NAME PASSWORD`: Set credentials of the wireless network to
