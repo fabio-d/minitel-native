@@ -76,6 +76,8 @@ bool Partition::open_ab_other(uint partition_num) {
         PICOBIN_PARTITION_FLAGS_LINK_VALUE_LSB;
     if (link_type == PICOBIN_PARTITION_FLAGS_LINK_TYPE_A_PARTITION) {
       other_partition_num = link_value;
+    } else {
+      return false;
     }
   }
 
