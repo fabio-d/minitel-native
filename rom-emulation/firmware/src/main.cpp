@@ -257,6 +257,30 @@ static std::pair<const uint8_t *, uint> handle_packet(
       }
       return encoder.finalize();
     }
+    case CLI_PACKET_TYPE_EMULATOR_ERASE: {
+      if (packet_length != 1 || *(uint8_t *)packet_data >= 16) {
+        return {nullptr, 0};  // Malformed request: do not reply.
+      }
+
+      encoder.begin(CLI_PACKET_TYPE_EMULATOR_ERASE ^
+                    CLI_PACKET_TYPE_REPLY_XOR_MASK);
+      uint8_t slot_num = *(const uint8_t *)packet_data;
+
+      write_token = packet_source;
+
+      if (data_partition.get_rom_info(slot_num).is_present()) {
+        data_partition.erase(slot_num);
+        encoder.push("OK", 2);
+
+        if (in_menu) {
+          // Refresh the menu, to reflect the new contents.
+          magic_io_signal_configuration_changed();
+        }
+      } else {
+        encoder.push("EMPTY", 5);
+      }
+      return encoder.finalize();
+    }
     default: {  // Unknown packet_type.
       return {0, 0};
     }

@@ -22,6 +22,7 @@ PACKET_TYPE_EMULATOR_WIRELESS_CONFIG = 6
 PACKET_TYPE_EMULATOR_OTA_BEGIN = 7
 PACKET_TYPE_EMULATOR_OTA_DATA = 8
 PACKET_TYPE_EMULATOR_OTA_END = 9
+PACKET_TYPE_EMULATOR_ERASE = 10
 PACKET_TYPE_REPLY_XOR_MASK = 0x80
 
 MAX_ROM_SIZE = 64 * 1024
@@ -141,6 +142,18 @@ def do_store(serial_port: serial.Serial, args: argparse.Namespace):
 
     if args.boot:
         do_boot(serial_port, argparse.Namespace(slot=args.slot))
+
+
+def do_erase(serial_port: serial.Serial, args: argparse.Namespace):
+    reply = transfer_packet(
+        serial_port,
+        PACKET_TYPE_EMULATOR_ERASE,
+        struct.pack("<B", args.slot),
+    )
+    if reply == b"OK":
+        print("Erase command succeeded.", file=sys.stderr)
+    else:
+        exit("Erase command failed.")
 
 
 def do_wl_set(serial_port: serial.Serial, args: argparse.Namespace):
@@ -294,7 +307,7 @@ def main():
 
     parser_boot = subparsers.add_parser(
         name="boot",
-        help="Starts the ROM stored in flash memory.",
+        help="Starts a ROM stored in flash memory.",
     )
     parser_boot.add_argument(
         "-n",
@@ -308,6 +321,10 @@ def main():
     parser_store = subparsers.add_parser(
         name="store",
         help="Stores a new ROM into flash memory.",
+        epilog=(
+            "Note: the previously stored ROM at the selected slot will be "
+            "implicitly erased, if present, without warning."
+        ),
     )
     parser_store.add_argument(
         "-n",
@@ -334,6 +351,19 @@ def main():
         help="ROM binary file.",
     )
     parser_store.set_defaults(func=do_store)
+
+    parser_erase = subparsers.add_parser(
+        name="erase",
+        help="Deletes a ROM stored in flash memory.",
+    )
+    parser_erase.add_argument(
+        "-n",
+        "--slot",
+        type=SLOT,
+        help="ROM slot number to erase (hex value between 0 and F).",
+        required=True,
+    )
+    parser_erase.set_defaults(func=do_erase)
 
     parser_wl_set = subparsers.add_parser(
         name="wl-set",

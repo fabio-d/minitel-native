@@ -271,6 +271,15 @@ void ConfigurationPartition::write_end() {
   }
 }
 
+void ConfigurationPartition::erase(uint slot_num) {
+  assert(slot_num < 16);
+
+  RomInfo &rom_slot = superblock_contents.rom_slots[slot_num];
+  memset(&rom_slot, 0xFF, sizeof(rom_slot));
+
+  flush_superblock_contents();
+}
+
 void ConfigurationPartition::set_wireless_config(const WirelessConfig &cfg) {
   superblock_contents.wireless = cfg;
 

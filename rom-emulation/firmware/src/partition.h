@@ -102,6 +102,8 @@ class ConfigurationPartition {
   void write_data(uint8_t value);
   void write_end();
 
+  void erase(uint slot_num);
+
   void set_wireless_config(const WirelessConfig &cfg);
   const WirelessConfig &get_wireless_config() const;
 
