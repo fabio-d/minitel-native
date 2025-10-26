@@ -25,10 +25,14 @@ static_assert(PIN_ADDR_ALL_MASK == 0xffff,
               "Address lines must start from GPIO0 and be consecutive");
 
 bi_decl(bi_pin_mask_with_names(PIN_ADDR_ALL_MASK, PIN_ADDR_ALL_NAMES));
-bi_decl(bi_1pin_with_name(PIN_NOPEN, "~NOPEN"));
-bi_decl(bi_1pin_with_name(PIN_BUSEN, "~BUSEN"));
 bi_decl(bi_1pin_with_name(PIN_ALE, "ALE"));
 bi_decl(bi_1pin_with_name(PIN_PSEN, "~PSEN"));
+
+#if ROM_EMULATOR_HAS_BUS_SWITCH == 1
+bi_decl(bi_program_feature("Bus Switch control"));
+bi_decl(bi_1pin_with_name(PIN_NOPEN, "~NOPEN"));
+bi_decl(bi_1pin_with_name(PIN_BUSEN, "~BUSEN"));
+#endif
 
 // PIO resources.
 static const PIO pio_serve = pio0;
@@ -123,6 +127,7 @@ void mememu_setup() {
                         nullptr /* set by dma_addr */,
                         dma_encode_transfer_count(1), false);
 
+#if ROM_EMULATOR_HAS_BUS_SWITCH == 1
   // Take control of the NOPEN output pin (which is externally pulled-down).
   // Let's start with maintaining 0 as an output, so that the SN74HCT541 doesn't
   // stop generating NOP (i.e. 0x00) yet. We have to be careful to never emit
@@ -137,6 +142,7 @@ void mememu_setup() {
   gpio_init(PIN_BUSEN);
   gpio_put(PIN_BUSEN, 0);
   gpio_set_dir(PIN_BUSEN, GPIO_OUT);
+#endif
 
   // Set the other GPIOs as inputs.
   gpio_init(PIN_ALE);
@@ -166,6 +172,7 @@ void mememu_setup() {
     tight_loop_contents();
   }
 
+#if ROM_EMULATOR_HAS_BUS_SWITCH == 1
   // With the state machines now running, we are now emitting NOPs (0x00) too.
   // We can tell the SN74HCT541 to stop emitting its own NOPs.
   sleep_us(100);
@@ -174,6 +181,7 @@ void mememu_setup() {
   // Give SN74HCT541 extra time to fully deactivate. After this, we can emit
   // non-0x00 values without conflicting with it.
   sleep_us(100);
+#endif
 }
 
 void mememu_start() {

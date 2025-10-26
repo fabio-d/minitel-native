@@ -1,16 +1,32 @@
 #!/usr/bin/env python3
+import argparse
+import enum
 import sys
 from pathlib import Path
 
 # This script takes a comma-separated ordered list of the 16 CPU-side bus line
 # names, and generates the corresponding functions to permute them to/from
-# Pico's GPIOs, in order from 0 to 15. Due to limitations of the PIO programs,
-# AD lines must be clustered next to each other.
+# Pico's GPIOs, in order from 0 to 15.
+#
+# Due to limitations of the PIO programs:
+# - AD lines must be clustered next to each other
+# - ALE and PSEN must be consecutive
+
+
+class BusSpecialFunction(enum.Enum):
+    NOPEN = enum.auto()
+    BUSEN = enum.auto()
+    ALE = enum.auto()
+    PSEN = enum.auto()
 
 
 class BusLine:
-    def __init__(self, gpioid: int, busid: int):
-        assert gpioid < 16 and busid < 16
+    def __init__(self, gpioid: int, busid: int | BusSpecialFunction):
+        if isinstance(busid, BusSpecialFunction):
+            assert 16 <= gpioid <= 22
+        else:
+            assert 0 <= gpioid <= 15
+            assert 0 <= busid <= 15
         self.gpioid = gpioid
         self.busid = busid
 
@@ -20,7 +36,9 @@ class BusLine:
 
     @property
     def busname(self) -> str:
-        if self.busid < 8:
+        if isinstance(self.busid, BusSpecialFunction):
+            return self.busid.name
+        elif self.busid < 8:
             return f"AD{self.busid}"
         else:
             return f"A{self.busid}"
@@ -43,18 +61,41 @@ def generate_permutation_function(
     return code
 
 
-input_busnames = sys.argv[1]
-output_path = Path(sys.argv[2])
+def busid2gpioid(
+    buslines: list[BusLine], busid: int | BusSpecialFunction
+) -> int:
+    for busline in buslines:
+        if busline.busid == busid:
+            return busline.gpioid
+    raise KeyError
 
-# Convert the array input strings into just numbers ("ADn" or "An" -> n).
-busname_to_busid = dict()
+
+parser = argparse.ArgumentParser()
+# required arguments
+parser.add_argument("input_busnames")
+parser.add_argument("output_path", type=Path)
+# optional features
+parser.add_argument("--with-bus-switch", action='store_true')
+
+args = parser.parse_args()
+
+# Convert the array input strings into just numbers ("ADn" or "An" -> n) or
+# values from the BusSpecialFunction enum.
+busname_to_busid = {
+    "ALE": BusSpecialFunction.ALE,
+    "PSEN": BusSpecialFunction.PSEN,
+}
+if args.with_bus_switch:
+    busname_to_busid["NOPEN"] = BusSpecialFunction.NOPEN
+    busname_to_busid["BUSEN"] = BusSpecialFunction.BUSEN
 for n in [0, 1, 2, 3, 4, 5, 6, 7]:
     busname_to_busid[f"AD{n}"] = n
 for n in [8, 9, 10, 11, 12, 13, 14, 15]:
     busname_to_busid[f"A{n}"] = n
 buslines = [
     BusLine(gpioid, busname_to_busid.pop(busname))
-    for gpioid, busname in enumerate(input_busnames.split(","))
+    for gpioid, busname in enumerate(args.input_busnames.split(","))
+    if busname != ""
 ]
 if len(busname_to_busid) != 0:
     exit("Not all bus lines have been mapped!")
@@ -64,22 +105,27 @@ mappings = "".join(
     f"inline constexpr uint PIN_{busline.busname} = {busline.gpioid}; // {busline}\n"
     for busline in buslines
 )
-mappings += "inline constexpr uint PIN_NOPEN = 17;\n"
-mappings += "inline constexpr uint PIN_BUSEN = 18;\n"
-mappings += "inline constexpr uint PIN_ALE = 19;\n"
-mappings += "inline constexpr uint PIN_PSEN = 20;\n"
+
+# Filter AD and A lines only. Entries are stored in order of increasing gpioid.
+a_buslines = [busline for busline in buslines if isinstance(busline.busid, int)]
+
+# Filter AD0-7 only. Entries are stored in order of increasing gpioid.
+ad_buslines = [busline for busline in a_buslines if busline.busid < 8]
 
 # Emit bus lines' names in GPIO order.
 mappings += "inline const char PIN_ADDR_ALL_NAMES[] =\n"
-mappings += '    "%s";\n' % "|".join(busline.busname for busline in buslines)
-
-# Filter AD0-7 only. Entries are stored in order of increasing gpioid.
-ad_buslines = [busline for busline in buslines if busline.busid < 8]
+mappings += '    "%s";\n' % "|".join(busline.busname for busline in a_buslines)
 
 # Verify that the AD lines are clustered next to each other.
 if ad_buslines[0].gpioid + 7 != ad_buslines[7].gpioid:
     exit("The AD lines must be mapped to consecutive GPIOs")
 mappings += "inline constexpr uint PIN_AD_BASE = %d;\n" % ad_buslines[0].gpioid
+
+# Verify that ALE and PSEN are consecutive.
+ale_gpioid = busid2gpioid(buslines, BusSpecialFunction.ALE)
+psen_gpioid = busid2gpioid(buslines, BusSpecialFunction.PSEN)
+if ale_gpioid + 1 != psen_gpioid:
+    exit("The ALE and PSEN lines must consecutive")
 
 pin_map_data = "// Permutation function for data bits.\n"
 pin_map_data += generate_permutation_function(
@@ -94,15 +140,15 @@ pin_map_address += "// Every address bit ends up at its GPIO position.\n"
 pin_map_address += generate_permutation_function(
     "pin_map_address",
     "uint16_t",
-    [(busline.busid, busline.gpioid) for busline in buslines],
+    [(busline.busid, busline.gpioid) for busline in a_buslines],
 )
 pin_map_address += generate_permutation_function(
     "pin_map_address_inverse",
     "uint16_t",
-    [(busline.gpioid, busline.busid) for busline in buslines],
+    [(busline.gpioid, busline.busid) for busline in a_buslines],
 )
 
-with output_path.open("wt") as fp:
+with args.output_path.open("wt") as fp:
     print("#ifndef PIN_MAP_H", file=fp)
     print("#define PIN_MAP_H", file=fp)
     print("", file=fp)

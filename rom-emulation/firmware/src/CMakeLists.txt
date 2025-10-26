@@ -22,6 +22,7 @@ pico_enable_stdio_usb(rom-emulator 1)
 target_compile_definitions(rom-emulator PRIVATE
   "-DMINITEL_MODEL_FEATURE=\"Minitel model ${MINITEL_MODEL}\""
   "-DROM_EMULATOR_IS_INTERACTIVE=${ROM_EMULATOR_IS_INTERACTIVE}"
+  "-DROM_EMULATOR_HAS_BUS_SWITCH=${ROM_EMULATOR_HAS_BUS_SWITCH}"
 )
 
 target_include_directories(rom-emulator PRIVATE
@@ -48,8 +49,8 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/generate-pin-map.py
     ${PINOUT}
     pin-map.h
+    $<${ROM_EMULATOR_HAS_BUS_SWITCH}:--with-bus-switch>
   DEPENDS ../scripts/generate-pin-map.py
-  VERBATIM
 )
 add_custom_target(pin-map
   DEPENDS pin-map.h

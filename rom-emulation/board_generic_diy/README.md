@@ -43,12 +43,14 @@ Once the socket has been identified, remove the old ROM.
 ## Connecting the Pico 2 or Pico 2 W
 
 On the Pico side, the `P0.0/AD0`-`P0.7/AD7` and `P2.0/A8`-`P2.7/A15` pins must
-be connected to GPIOs 0-15, `ALE/PROG` to GPIO 19 and `PSEN` to GPIO 20. At
-least one of the Pico's GND pins must be tied to the Minitel's `VSS`.
+be connected to GPIOs 0-15, and `ALE/PROG` and `PSEN` to consecutive GPIOs in
+the range 16-22. At least one of the Pico's GND pins must be tied to the
+Minitel's `VSS`.
 
 It is possible to connect AD0-7 and A8-15 to GPIOs 0-15 in any order, provided
 the constraints described in
 [scripts/generate-pin-map.py](../firmware/scripts/generate-pin-map.py) are met.
+`ALE/PROG` and `PSEN` must be consecutive, with `ALE/PROG` first.
 
 The following table shows an example of a valid mapping. If you plan to deviate
 from it, try building the Pico firmware with the corresponding `justrom:` string
@@ -57,27 +59,32 @@ first (see
 below) to validate your intended design. The build will fail if the constraints
 are not met.
 
-| Minitel CPU side | Pico 2 side |
-|------------------|-------------|
-| `P2.0/A8`        | GPIO 0      |
-| `P2.1/A9`        | GPIO 1      |
-| `P2.2/A10`       | GPIO 2      |
-| `P2.3/A11`       | GPIO 3      |
-| `P2.4/A12`       | GPIO 4      |
-| `P2.5/A13`       | GPIO 5      |
-| `P2.6/A14`       | GPIO 6      |
-| `P2.7/A15`       | GPIO 7      |
-| `P0.7/AD7`       | GPIO 8      |
-| `P0.6/AD6`       | GPIO 9      |
-| `P0.5/AD5`       | GPIO 10     |
-| `P0.4/AD4`       | GPIO 11     |
-| `P0.3/AD3`       | GPIO 12     |
-| `P0.2/AD2`       | GPIO 13     |
-| `P0.1/AD1`       | GPIO 14     |
-| `P0.0/AD0`       | GPIO 15     |
-| `ALE/PROG`       | GPIO 19     |
-| `PSEN`           | GPIO 20     |
-| `VSS`            | GND         |
+| Pico 2 side | Minitel CPU side |
+|-------------|------------------|
+| GPIO 0      | `P2.0/A8`        |
+| GPIO 1      | `P2.1/A9`        |
+| GPIO 2      | `P2.2/A10`       |
+| GPIO 3      | `P2.3/A11`       |
+| GPIO 4      | `P2.4/A12`       |
+| GPIO 5      | `P2.5/A13`       |
+| GPIO 6      | `P2.6/A14`       |
+| GPIO 7      | `P2.7/A15`       |
+| GPIO 8      | `P0.7/AD7`       |
+| GPIO 9      | `P0.6/AD6`       |
+| GPIO 10     | `P0.5/AD5`       |
+| GPIO 11     | `P0.4/AD4`       |
+| GPIO 12     | `P0.3/AD3`       |
+| GPIO 13     | `P0.2/AD2`       |
+| GPIO 14     | `P0.1/AD1`       |
+| GPIO 15     | `P0.0/AD0`       |
+| GPIO 16     | Not connected    |
+| GPIO 17     | Not connected    |
+| GPIO 18     | Not connected    |
+| GPIO 19     | `ALE/PROG`       |
+| GPIO 20     | `PSEN`           |
+| GPIO 21     | Not connected    |
+| GPIO 22     | Not connected    |
+| GND         | `VSS`            |
 
 The connection method (direct wires, breadboard or hand-soldered board) depends
 on the Minitel socket type and what kind of material is available to you.
@@ -102,11 +109,11 @@ instead. Please report back if you find ways to do it in other Minitel models!
 
 ## Building the firmware and flashing a ROM
 
-Write down all the lines that are connected to the Pico's GPIOs 0-15, in order,
+Write down all the lines that are connected to the Pico's GPIOs, in order,
 separated by commas. This will be used for the `justrom:` string in the `cmake`
 command line. For instance, if the connections were made in accordance to the
 table above, the string will be
-`justrom:A8,A9,A10,A11,A12,A13,A14,A15,AD7,AD6,AD5,AD4,AD3,AD2,AD1,AD0`.
+`justrom:A8,A9,A10,A11,A12,A13,A14,A15,AD7,AD6,AD5,AD4,AD3,AD2,AD1,AD0,,,,ALE,PSEN`.
 
 Build the firmware with `OPERATING_MODE=embedded` and `MINITEL_MODEL` set to the
 string we just constructed. The other parameters (including, notably, the path
@@ -119,7 +126,7 @@ $ cd build/
 $ cmake .. \
     -DPICO_SDK_PATH=~/pico-sdk \
     -DPICO_BOARD=<pico2|pico2_w> \
-    -DMINITEL_MODEL=justrom:A8,A9,A10,A11,A12,A13,A14,A15,AD7,AD6,AD5,AD4,AD3,AD2,AD1,AD0 \
+    -DMINITEL_MODEL=justrom:A8,A9,A10,A11,A12,A13,A14,A15,AD7,AD6,AD5,AD4,AD3,AD2,AD1,AD0,,,,ALE,PSEN \
     -DOPERATING_MODE=embedded \
     -DEMBED_ROM_FILE=/path/to/rom.bin
 
