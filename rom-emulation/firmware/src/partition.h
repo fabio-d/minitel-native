@@ -59,7 +59,7 @@ class Partition {
 //   Which one is current is determined when the partition is opened by locating
 //   the one with the lowest generation_counter.
 // - Immediately after, the ROMs' contents follow. Each ROM slot has a fixed
-//   MAX_ROM_SIZE of bytes reserved for it, even if the slot if currently empty
+//   MAX_MEM_SIZE of bytes reserved for it, even if the slot if currently empty
 //   or its stored ROM is smaller than that.
 //
 // In order to 1) tolerate power cuts during updates and 2) implement a very

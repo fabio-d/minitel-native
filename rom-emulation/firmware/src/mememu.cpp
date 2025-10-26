@@ -1,4 +1,4 @@
-#include "romemu.h"
+#include "mememu.h"
 
 #include <hardware/dma.h>
 #include <hardware/pio.h>
@@ -7,8 +7,8 @@
 
 #include <atomic>
 
+#include "mememu.pio.h"
 #include "pin-map.h"
-#include "romemu.pio.h"
 
 static constexpr uint32_t PIN_ADDR_AD_MASK =
     (1 << PIN_AD0) | (1 << PIN_AD1) | (1 << PIN_AD2) | (1 << PIN_AD3) |
@@ -43,17 +43,16 @@ static constexpr uint dma_addr = 0;
 static constexpr uint dma_data = 1;
 
 // ROM, stored as (pin-mapped address) -> (pin-mapped value).
-static constexpr uint ROM_SIZE = 64 * 1024;
-static std::atomic<uint8_t> rom[ROM_SIZE] [[gnu::aligned(ROM_SIZE)]];
+static std::atomic<uint8_t> rom[MAX_MEM_SIZE] [[gnu::aligned(MAX_MEM_SIZE)]];
 
 // PC values to jump to activate/pause the sm_latch state machine.
 static uint pc_latch_paused, pc_latch_active;
 
-void romemu_setup() {
+void mememu_setup() {
   // Initially fill the emulated ROM contents with 0xFF. Note that, in fact, we
-  // will keep serving NOPs (0x00) until romemu_start is called.
-  for (uint i = 0; i < ROM_SIZE; i++) {
-    romemu_write(i, 0xFF);
+  // will keep serving NOPs (0x00) until mememu_start is called.
+  for (uint i = 0; i < MAX_MEM_SIZE; i++) {
+    mememu_write_rom(i, 0xFF);
   }
 
   // Claim the resources that we will need.
@@ -65,17 +64,17 @@ void romemu_setup() {
   dma_channel_claim(dma_data);
 
   // Load the programs into the PIO engine.
-  uint prog_out = pio_add_program(pio_serve, &romemu_out_program);
-  uint prog_dir = pio_add_program(pio_serve, &romemu_dir_program);
-  uint prog_latch = pio_add_program(pio_sense, &romemu_latch_program);
-  pio_sm_config cfg_out = romemu_out_program_get_default_config(prog_out);
-  pio_sm_config cfg_dira = romemu_dir_program_get_default_config(prog_dir);
-  pio_sm_config cfg_dirb = romemu_dir_program_get_default_config(prog_dir);
-  pio_sm_config cfg_latch = romemu_latch_program_get_default_config(prog_latch);
+  uint prog_out = pio_add_program(pio_serve, &mememu_out_program);
+  uint prog_dir = pio_add_program(pio_serve, &mememu_dir_program);
+  uint prog_latch = pio_add_program(pio_sense, &mememu_latch_program);
+  pio_sm_config cfg_out = mememu_out_program_get_default_config(prog_out);
+  pio_sm_config cfg_dira = mememu_dir_program_get_default_config(prog_dir);
+  pio_sm_config cfg_dirb = mememu_dir_program_get_default_config(prog_dir);
+  pio_sm_config cfg_latch = mememu_latch_program_get_default_config(prog_latch);
 
   // Remember the addresses of these two labels.
-  pc_latch_paused = prog_latch + romemu_latch_offset_paused;
-  pc_latch_active = prog_latch + romemu_latch_offset_active;
+  pc_latch_paused = prog_latch + mememu_latch_offset_paused;
+  pc_latch_active = prog_latch + mememu_latch_offset_active;
 
   // Assign pin numbers.
   sm_config_set_out_pins(&cfg_out, PIN_AD_BASE, 8);
@@ -149,9 +148,9 @@ void romemu_setup() {
 
   // Start the state machines. Start sm_out first and then wait a bit to be sure
   // that the initial output value of 0x00 has propagated.
-  uint out_entry_point = prog_out + romemu_out_offset_entry_point;
-  uint dir_entry_point = prog_dir + romemu_dir_offset_entry_point;
-  uint latch_entry_point = prog_latch + romemu_latch_offset_entry_point;
+  uint out_entry_point = prog_out + mememu_out_offset_entry_point;
+  uint dir_entry_point = prog_dir + mememu_dir_offset_entry_point;
+  uint latch_entry_point = prog_latch + mememu_latch_offset_entry_point;
   pio_sm_init(pio_serve, sm_out, out_entry_point, &cfg_out);
   pio_sm_init(pio_serve, sm_dira, dir_entry_point, &cfg_dira);
   pio_sm_init(pio_serve, sm_dirb, dir_entry_point, &cfg_dirb);
@@ -177,7 +176,7 @@ void romemu_setup() {
   sleep_us(100);
 }
 
-void romemu_start() {
+void mememu_start() {
   // Start the DMA engine too.
   dma_channel_start(dma_addr);
 
@@ -185,7 +184,7 @@ void romemu_start() {
   pio_sm_exec(pio_sense, sm_latch, pio_encode_jmp(pc_latch_active));
 }
 
-void romemu_stop() {
+void mememu_stop() {
   // Save the current values of the CTRL register of both DMA channels.
   uint32_t old_ctrl_addr = dma_channel_hw_addr(dma_addr)->al1_ctrl;
   uint32_t old_ctrl_data = dma_channel_hw_addr(dma_data)->al1_ctrl;
@@ -213,7 +212,7 @@ void romemu_stop() {
   dma_channel_hw_addr(dma_data)->al1_ctrl = old_ctrl_data;
 }
 
-void romemu_write(uint16_t address, uint8_t value) {
+void mememu_write_rom(uint16_t address, uint8_t value) {
   // Transform the logical address and value into the corresponding pin-mapped
   // permutation.
   uint16_t address_pin_values = pin_map_address(address);

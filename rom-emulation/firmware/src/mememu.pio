@@ -1,6 +1,6 @@
-.program romemu_out
+.program mememu_out
 ; This program sets the output value of the 8 AD pins, but not the direction,
-; which is controlled by `romemu_dir` program below.
+; which is controlled by `mememu_dir` program below.
 .out 8
 
 ; Run at full speed.
@@ -18,9 +18,9 @@ out pins, 8
 
 ; ------------------------------------------------------------------------------
 
-.program romemu_dir
+.program mememu_dir
 ; This program sets the direction of the AD pins, but not the value, which is
-; controlled by `romemu_out` program above. It keeps the 4 sideset pins
+; controlled by `mememu_out` program above. It keeps the 4 sideset pins
 ; configured as outputs for as long as the PSEN line is low.
 ; It is meant to be instantiated twice, with 4 out of the 8 AD pins handled
 ; separately by each instance.
@@ -50,7 +50,7 @@ wait 1 jmppin       side 0b1111
 
 ; ------------------------------------------------------------------------------
 
-.program romemu_latch
+.program mememu_latch
 ; This program "latches" the address according to ALE and emits it to the FIFO
 ; on the falling edge. The emitted address is prefixed with a constant value, to
 ; form a pointer for DMA chaining.

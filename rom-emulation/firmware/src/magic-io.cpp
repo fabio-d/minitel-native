@@ -18,9 +18,9 @@ static_assert(MAGIC_RANGE_BASE + sizeof(MAGIC_IO_t) <= TRAMPOLINE_ADDRESS,
 #define ADDRESS_OF(field_name) \
   (MAGIC_RANGE_BASE + offsetof(MAGIC_IO_t, field_name))
 #define SET_FIELD(field_name, new_value) \
-  romemu_write(ADDRESS_OF(field_name), new_value)
+  mememu_write_rom(ADDRESS_OF(field_name), new_value)
 #define SET_INDEXED_FIELD(field_name, index, new_value) \
-  romemu_write(ADDRESS_OF(field_name) + index, new_value)
+  mememu_write_rom(ADDRESS_OF(field_name) + index, new_value)
 
 static uint8_t reset_generation_count = 0;
 static MAGIC_IO_DESIRED_STATE_t desired_state;
@@ -64,9 +64,9 @@ void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state) {
   SET_FIELD(a.configuration_load_block_ack, 0);
 
   // Write trampoline (infinite SJMP loop followed by a NOP).
-  romemu_write(TRAMPOLINE_ADDRESS + 0, 0x80);
-  romemu_write(TRAMPOLINE_ADDRESS + 1, 0xFE);
-  romemu_write(TRAMPOLINE_ADDRESS + 2, 0x00);
+  mememu_write_rom(TRAMPOLINE_ADDRESS + 0, 0x80);
+  mememu_write_rom(TRAMPOLINE_ADDRESS + 1, 0xFE);
+  mememu_write_rom(TRAMPOLINE_ADDRESS + 2, 0x00);
 
   // This must be done last because it is also used for signalling in response
   // to reset requests.
@@ -109,11 +109,13 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
   if (in_trampoline) {
     // Fill the whole ROM with NOPs.
     for (uint16_t i = 0; i < TRAMPOLINE_ADDRESS; i++) {
-      romemu_write(i, 0x00);
+      mememu_write_rom(i, 0x00);
     }
-    romemu_write(TRAMPOLINE_ADDRESS + 1, 0x00);  // override jmp target first.
+    // Override the SJMP target address first.
+    mememu_write_rom(TRAMPOLINE_ADDRESS + 1, 0x00);
     sleep_us(200);
-    romemu_write(TRAMPOLINE_ADDRESS + 0, 0x00);
+    // Then the opcode.
+    mememu_write_rom(TRAMPOLINE_ADDRESS + 0, 0x00);
     sleep_us(200);
     return MagicIoSignal::InTrampoline;
   }
@@ -226,16 +228,16 @@ MagicIoSignal magic_io_analyze_traces(const uint16_t *samples,
       if (configuration_load_last_address.has_value()) {
         // This should never happen if the other side follows the protocol.
         // Let's try to recover somehow.
-        romemu_write(*configuration_load_last_address, 1);
+        mememu_write_rom(*configuration_load_last_address, 1);
       }
       configuration_load_last_address = address;
       SET_FIELD(a.configuration_load_block_ack, 1);
-      romemu_write(address, 0);
+      mememu_write_rom(address, 0);
       return signal;
     }
     case ADDRESS_OF(a.configuration_load_block_ack): {
       if (configuration_load_last_address.has_value()) {
-        romemu_write(*configuration_load_last_address, 1);
+        mememu_write_rom(*configuration_load_last_address, 1);
         configuration_load_last_address = std::nullopt;
       } else {
         // This branch should never be taken if the other side follows the

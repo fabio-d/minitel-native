@@ -3,13 +3,13 @@ add_executable(rom-emulator
   led.cpp
   magic-io.cpp
   main.cpp
+  mememu.cpp
   partition.cpp
-  romemu.cpp
   trace.cpp
 )
 
 pico_generate_pio_header(rom-emulator
-  ${CMAKE_CURRENT_SOURCE_DIR}/romemu.pio
+  ${CMAKE_CURRENT_SOURCE_DIR}/mememu.pio
   ${CMAKE_CURRENT_SOURCE_DIR}/trace.pio
 )
 

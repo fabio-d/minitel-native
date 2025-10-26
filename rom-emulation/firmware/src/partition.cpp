@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <tuple>
 
-#include "romemu.h"
+#include "mememu.h"
 
 std::tuple<uint32_t, uint32_t> extract_base_offset_and_size(
     uint32_t permissions_and_location) {
@@ -210,7 +210,7 @@ const ConfigurationPartition::RomInfo &ConfigurationPartition::get_rom_info(
 const uint8_t *ConfigurationPartition::get_rom_contents(uint slot_num) const {
   assert(slot_num < 16);
   return static_cast<const uint8_t *>(
-      data_partition.get_contents(ROM_BASE_OFFSET + slot_num * MAX_ROM_SIZE));
+      data_partition.get_contents(ROM_BASE_OFFSET + slot_num * MAX_MEM_SIZE));
 }
 
 void ConfigurationPartition::write_begin(uint slot_num, uint8_t name_length,
@@ -234,7 +234,7 @@ void ConfigurationPartition::write_begin(uint slot_num, uint8_t name_length,
 }
 
 void ConfigurationPartition::write_data(uint8_t value) {
-  if (write_status && write_status->write_cursor < MAX_ROM_SIZE) {
+  if (write_status && write_status->write_cursor < MAX_MEM_SIZE) {
     // Are we about to write to a different block than before?
     if (write_status->write_cursor % FLASH_SECTOR_SIZE == 0) {
       // Flush the previous block, unless we are just starting.
@@ -242,7 +242,7 @@ void ConfigurationPartition::write_data(uint8_t value) {
         uint32_t rom_block_num =
             (write_status->write_cursor - 1) / FLASH_SECTOR_SIZE;
         data_partition.erase_and_write_from_buffer(
-            ROM_BASE_OFFSET + write_status->slot_num * MAX_ROM_SIZE +
+            ROM_BASE_OFFSET + write_status->slot_num * MAX_MEM_SIZE +
             rom_block_num * FLASH_SECTOR_SIZE);
       }
 
@@ -261,7 +261,7 @@ void ConfigurationPartition::write_end() {
     uint32_t rom_block_num =
         (write_status->write_cursor - 1) / FLASH_SECTOR_SIZE;
     data_partition.erase_and_write_from_buffer(
-        ROM_BASE_OFFSET + write_status->slot_num * MAX_ROM_SIZE +
+        ROM_BASE_OFFSET + write_status->slot_num * MAX_MEM_SIZE +
         rom_block_num * FLASH_SECTOR_SIZE);
 
     RomInfo &rom_slot = superblock_contents.rom_slots[write_status->slot_num];

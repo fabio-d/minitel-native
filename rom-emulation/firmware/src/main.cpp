@@ -18,15 +18,15 @@
 #include "embedded-rom-array.h"
 #include "led.h"
 #include "magic-io.h"
+#include "mememu.h"
 #include "partition.h"
-#include "romemu.h"
 #include "trace.h"
 
 bi_decl(bi_program_feature(MINITEL_MODEL_FEATURE));
 
 #if ROM_EMULATOR_IS_INTERACTIVE == 0
 bi_decl(bi_program_feature("Embedded operating mode"));
-static_assert(sizeof(EMBEDDED_ROM) <= MAX_ROM_SIZE);
+static_assert(sizeof(EMBEDDED_ROM) <= MAX_MEM_SIZE);
 #elif ROM_EMULATOR_IS_INTERACTIVE == 1
 bi_decl(bi_program_feature("Interactive operating mode"));
 static_assert(sizeof(EMBEDDED_ROM) <= MAGIC_RANGE_BASE);
@@ -387,8 +387,8 @@ static void load_rom_from_data_partition() {
   const ConfigurationPartition::RomInfo &info =
       data_partition.get_rom_info(selected_boot_slot_num);
   const uint8_t *src = data_partition.get_rom_contents(selected_boot_slot_num);
-  for (uint32_t i = 0; i < MAX_ROM_SIZE && i < info.size; i++) {
-    romemu_write(i, src[i]);
+  for (uint32_t i = 0; i < MAX_MEM_SIZE && i < info.size; i++) {
+    mememu_write_rom(i, src[i]);
   }
 }
 
@@ -399,7 +399,7 @@ int main() {
 
   // Take over the duty of responding to PSEN requests from the SN74HCT541 to
   // ourselves.
-  romemu_setup();
+  mememu_setup();
 
   // Start recording requested ROM addresses. Since nothing is consuming them,
   // the FIFO will overflow and stay that way until trace_collect is called.
@@ -411,7 +411,7 @@ int main() {
 
   // Fill the emulated ROM.
   for (size_t i = 0; i < sizeof(EMBEDDED_ROM); i++) {
-    romemu_write(i, EMBEDDED_ROM[i]);
+    mememu_write_rom(i, EMBEDDED_ROM[i]);
   }
 
 #if ROM_EMULATOR_IS_INTERACTIVE == 1
@@ -424,7 +424,7 @@ int main() {
   can_accept_boot_command = partition_ok;
 #endif
 
-  romemu_start();
+  mememu_start();
   stdio_init_all();
 
 #if ROM_EMULATOR_WITH_WIRELESS == 1
@@ -485,12 +485,12 @@ int main() {
           break;
         }
         case MagicIoSignal::InTrampoline: {
-          romemu_stop();
+          mememu_stop();
           in_menu = false;
 
           load_rom_from_data_partition();
 
-          romemu_start();
+          mememu_start();
           break;
         }
         // Interpret bytes received over magic I/O's serial tunnel with the

@@ -5,13 +5,13 @@
 #include <stdint.h>
 
 #include "magic-io-definitions.h"
-#include "romemu.h"
+#include "mememu.h"
 
 // The "magic range" is an area of the emulated ROM, in which the act of reading
 // certain locations by the Minitel CPU triggers corresponding actions on our
 // Pico side.
 constexpr uint16_t MAGIC_RANGE_SIZE = 0x1000;
-constexpr uint16_t MAGIC_RANGE_BASE = MAX_ROM_SIZE - MAGIC_RANGE_SIZE;
+constexpr uint16_t MAGIC_RANGE_BASE = MAX_MEM_SIZE - MAGIC_RANGE_SIZE;
 constexpr uint16_t MAGIC_RANGE_END = MAGIC_RANGE_BASE + sizeof(MAGIC_IO_t);
 
 // The Minitel can send one of these signals to the Pico.
@@ -37,7 +37,7 @@ enum class MagicIoSignal {
   SerialRxFF = SerialRx00 + 0xFF,
 };
 
-// If called right after loading a ROM into memory, but before romemu_start(),
+// If called right after loading a ROM into memory, but before mememu_start(),
 // it initializes the in-memory values used by the magic I/O interface.
 void magic_io_prepare_rom(MAGIC_IO_DESIRED_STATE_t initial_state);
 
