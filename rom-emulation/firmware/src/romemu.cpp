@@ -12,6 +12,9 @@
 static constexpr uint32_t PIN_ADDR_AD_MASK =
     (1 << PIN_AD0) | (1 << PIN_AD1) | (1 << PIN_AD2) | (1 << PIN_AD3) |
     (1 << PIN_AD4) | (1 << PIN_AD5) | (1 << PIN_AD6) | (1 << PIN_AD7);
+static_assert(PIN_ADDR_AD_MASK >> PIN_AD_BASE == 0xff,
+              "Data lines must be consecutive");
+
 static constexpr uint32_t PIN_ADDR_A_MASK =
     (1 << PIN_A8) | (1 << PIN_A9) | (1 << PIN_A10) | (1 << PIN_A11) |
     (1 << PIN_A12) | (1 << PIN_A13) | (1 << PIN_A14) | (1 << PIN_A15);
@@ -28,8 +31,9 @@ bi_decl(bi_1pin_with_name(PIN_PSEN, "~PSEN"));
 
 // PIO resources.
 static const PIO pio = pio0;
-static constexpr uint sm_a = 0;
-static constexpr uint sm_b = 1;
+static constexpr uint sm_out = 0;
+static constexpr uint sm_dira = 1;
+static constexpr uint sm_dirb = 2;
 
 // Doorbell resource, to make core1 jump to the given address.
 static constexpr uint db_restart_core1 = 0;
@@ -37,14 +41,11 @@ static std::atomic<uintptr_t> db_restart_core1_target_address;
 
 static std::atomic<bool> core1_started = false;
 
-// ROM, stored as (pin-mapped address) -> (PIO instructions for sm_a and sm_b)
+// ROM, stored as (pin-mapped address) -> (pin-mapped value)
 // in a dedicated RAM region exclusively accessed by core1 while romemu is
 // running.
-//
-// The value is a pair of PIO instructions for sm_a and sm_b that inject the
-// corresponding value into the respective state machines.
 static constexpr uint ROM_SIZE = 64 * 1024;
-static std::atomic<uint32_t> rom[ROM_SIZE] [[gnu::section(
+static std::atomic<uint8_t> rom[ROM_SIZE] [[gnu::section(
     ".ram2_uninitialized_data")]];
 
 /*
@@ -71,14 +72,14 @@ static std::atomic<uint32_t> rom[ROM_SIZE] [[gnu::section(
  *   - r1: Most recent GPIO readout.
  *   - r2: Most recent GPIO readout whose ALE bit was high. The lowest 16 bits
  *         of this register contain the latched address.
- *   - r3/r4: Encoded instructions for sm_a/sm_b.
+ *   - r3: Value to be emitted (only the lower 8 bits are meaningful).
  * - Constant values:
  *   - kAleToSign: Number to bits to left-shift a GPIO reading so that the ALE
  *                 bit (i.e. 1 << PIN_ALE) ends up at the position of the sign
  *                 bit (i.e. 1 << 31).
  * - Constant registers:
  *   - r6: Address of the "rom" array.
- *   - r8/r9: Address of PIO's SMx_INSTR registers for sm_a/sm_b.
+ *   - r8: Address of PIO's RXFIFO register sm_out.
  *
  * This function's code is stored in a RAM region that is exclusively accessed
  * by core1 (__scratch_x).
@@ -86,16 +87,12 @@ static std::atomic<uint32_t> rom[ROM_SIZE] [[gnu::section(
 [[gnu::noinline, gnu::noreturn]]
 static void __scratch_x("romemu_worker_in_ram") core1_worker_task() {
   constexpr uint kAleToSign = 31 - PIN_ALE;
-  register const std::atomic<uint32_t>* rom_in asm("r6") = rom;
-  register io_rw_32* instr_a_in asm("r8") = &pio->sm[sm_a].instr;
-  register io_rw_32* instr_b_in asm("r9") = &pio->sm[sm_b].instr;
+  register const std::atomic<uint8_t>* rom_in asm("r6") = rom;
+  register io_rw_32* data_out asm("r8") = &pio->rxf_putget[sm_out][0];
 
   asm volatile(
-      // Load the PIO instructions to serve address 0, but don't execute them
-      // yet.
-      "ldr r0, [r6, #0]\n"
-      "uxth r3, r0\n"
-      "lsrs r4, r0, #16\n"
+      // Load the value to serve at address 0, but don't emit it yet.
+      "ldrb r3, [r6, #0]\n"
 
       // Initialize the latch with non-zero address bits.
       "mov r2, #-1\n"
@@ -114,10 +111,8 @@ static void __scratch_x("romemu_worker_in_ram") core1_worker_task() {
       "bne 2b\n"                      // Keep waiting if not.
 
       // If we are here, it means that address 0 has been latched and ALE is
-      // low. Serve the value at address 0 by executing the instructions we
-      // had prepared.
-      "str r3, [r8]\n"  // Write into sm_a.
-      "str r4, [r9]\n"  // Write into sm_b.
+      // low. Serve the value at address 0.
+      "str r3, [r8]\n"  // Write into sm_out.
 
       // Synchronization for subsequent instructions: latch the GPIOs if ALE is
       // high and wait for ALE to become low.
@@ -129,21 +124,15 @@ static void __scratch_x("romemu_worker_in_ram") core1_worker_task() {
       "lsls r0, r1, %[kAleToSign]\n"  // Shift ALE into the sign position.
       "bmi 3b\n"                      // Branch if ALE is high.
 
-      // Load the PIO instructions to serve the latched address.
-      "uxth r0, r2\n"  // Isolate the address bits.
-      "ldr r0, [r6, r0, lsl #2]\n"
-      "uxth r3, r0\n"
-      "lsrs r4, r0, #16\n"
-
-      // Execute them.
-      "str r3, [r8]\n"  // Write into sm_a.
-      "str r4, [r9]\n"  // Write into sm_b.
+      // Serve the latched address.
+      "uxth r0, r2\n"        // Isolate the address bits.
+      "ldrb r3, [r6, r0]\n"  // Load from the "rom" array.
+      "str r3, [r8]\n"       // Write into sm_out.
 
       // Repeat main loop.
       "b 4b\n"
       :
-      : [kAleToSign] "I"(kAleToSign), "r"(rom_in), "r"(instr_a_in),
-        "r"(instr_b_in));
+      : [kAleToSign] "I"(kAleToSign), "r"(rom_in), "r"(data_out));
 
   __builtin_unreachable();
 }
@@ -175,13 +164,9 @@ static void __scratch_x("romemu_worker_in_ram") core1_idle_task() {
 // Generic User Guide", section 2.3.7 "Exception entry and return".
 static void __scratch_x("romemu_worker_in_ram") core1_doorbell_irq() {
   {
-    register uint32_t instr asm("r0") = pio_encode_set(pio_pins, 0);
-    register io_rw_32* instr_a_in asm("r1") = &pio->sm[sm_a].instr;
-    register io_rw_32* instr_b_in asm("r2") = &pio->sm[sm_b].instr;
-    asm volatile(
-        "str r0, [r1]\n"
-        "str r0, [r2]\n" ::"r"(instr),
-        "r"(instr_a_in), "r"(instr_b_in));
+    register uint32_t instr asm("r0") = 0x00; /* NOP */
+    register io_rw_32* data_out asm("r1") = &pio->rxf_putget[sm_out][0];
+    asm volatile("str r0, [r1]\n" ::"r"(instr), "r"(data_out));
   }
 
   {
@@ -220,31 +205,39 @@ static void core1_restart(void (*new_task)(void)) {
 
 void romemu_setup() {
   // Claim the resources that we will need.
-  pio_sm_claim(pio, sm_a);
-  pio_sm_claim(pio, sm_b);
+  pio_sm_claim(pio, sm_out);
+  pio_sm_claim(pio, sm_dira);
+  pio_sm_claim(pio, sm_dirb);
   multicore_doorbell_claim(db_restart_core1, 0b10);
 
-  // Load the program into the PIO engine.
-  uint prog = pio_add_program(pio, &romemu_drive_data_outputs_program);
-  pio_sm_config cfg_a =
-      romemu_drive_data_outputs_program_get_default_config(prog);
-  pio_sm_config cfg_b =
-      romemu_drive_data_outputs_program_get_default_config(prog);
+  // Load the programs into the PIO engine.
+  uint prog_out = pio_add_program(pio, &romemu_out_program);
+  uint prog_dir = pio_add_program(pio, &romemu_dir_program);
+  pio_sm_config cfg_out = romemu_out_program_get_default_config(prog_out);
+  pio_sm_config cfg_dira = romemu_dir_program_get_default_config(prog_dir);
+  pio_sm_config cfg_dirb = romemu_dir_program_get_default_config(prog_dir);
 
   // Assign pin numbers.
-  sm_config_set_jmp_pin(&cfg_a, PIN_PSEN);
-  sm_config_set_jmp_pin(&cfg_b, PIN_PSEN);
-  sm_config_set_set_pins(&cfg_a, PIN_AD_BASE_A, 4);
-  sm_config_set_set_pins(&cfg_b, PIN_AD_BASE_B, 4);
-  sm_config_set_sideset_pins(&cfg_a, PIN_AD_BASE_A);
-  sm_config_set_sideset_pins(&cfg_b, PIN_AD_BASE_B);
-  pio_sm_set_consecutive_pindirs(pio, sm_a, PIN_AD_BASE_A, 4, false);
-  pio_sm_set_consecutive_pindirs(pio, sm_b, PIN_AD_BASE_B, 4, false);
+  sm_config_set_out_pins(&cfg_out, PIN_AD_BASE, 8);
+  sm_config_set_set_pins(&cfg_out, PIN_AD_BASE, 8);
+  sm_config_set_jmp_pin(&cfg_dira, PIN_PSEN);
+  sm_config_set_jmp_pin(&cfg_dirb, PIN_PSEN);
+  sm_config_set_sideset_pins(&cfg_dira, PIN_AD_BASE);
+  sm_config_set_sideset_pins(&cfg_dirb, PIN_AD_BASE + 4);
+  pio_sm_set_consecutive_pindirs(pio, sm_dira, PIN_AD_BASE, 4, false);
+  pio_sm_set_consecutive_pindirs(pio, sm_dirb, PIN_AD_BASE + 4, 4, false);
+
+  // Set the initial output value to zero, for two reasons:
+  // - an all-zero value is interpreted by the Minitel CPU as a (harmless) NOP,
+  //   which safely "parks" it until we start serving the real ROM.
+  // - to avoid bus conflicts while taking over from the SN74HCT541, as it emits
+  //   zeros too.
+  pio_sm_set_pins(pio, sm_out, 0x00);
+  pio->rxf_putget[sm_out][0] = 0x00;
 
   // Claim tristate GPIOs.
-  for (int i = 0; i < 4; i++) {
-    pio_gpio_init(pio, PIN_AD_BASE_A + i);
-    pio_gpio_init(pio, PIN_AD_BASE_B + i);
+  for (int i = 0; i < 8; i++) {
+    pio_gpio_init(pio, PIN_AD_BASE + i);
   }
 
   // Take control of the NOPEN output pin (which is externally pulled-down).
@@ -270,11 +263,15 @@ void romemu_setup() {
   gpio_init_mask(PIN_ADDR_A_MASK);
   gpio_set_dir_in_masked(PIN_ADDR_A_MASK);
 
-  // Start the state machines.
-  uint pc_entry_point = prog + romemu_drive_data_outputs_offset_entry_point;
-  pio_sm_init(pio, sm_a, pc_entry_point, &cfg_a);
-  pio_sm_init(pio, sm_b, pc_entry_point, &cfg_b);
-  pio_enable_sm_mask_in_sync(pio, (1 << sm_a) | (1 << sm_b));
+  // Start the state machines. Start sm_out first and then wait a bit to be sure
+  // that the initial output value of 0x00 has propagated.
+  uint out_entry_point = prog_out + romemu_out_offset_entry_point;
+  uint dir_entry_point = prog_dir + romemu_dir_offset_entry_point;
+  pio_sm_init(pio, sm_out, out_entry_point, &cfg_out);
+  pio_sm_init(pio, sm_dira, dir_entry_point, &cfg_dira);
+  pio_sm_init(pio, sm_dirb, dir_entry_point, &cfg_dirb);
+  pio_enable_sm_mask_in_sync(pio, 1 << sm_out);
+  pio_enable_sm_mask_in_sync(pio, (1 << sm_dira) | (1 << sm_dirb));
 
   // With the state machines now running, we are now emitting NOPs (0x00) too.
   // We can tell the SN74HCT541 to stop emitting its own NOPs.
@@ -314,12 +311,6 @@ void romemu_write(uint16_t address, uint8_t value) {
   uint16_t address_pin_values = pin_map_address(address);
   uint8_t value_pin_values = pin_map_data(value);
 
-  // Encode the PIO instruction that sets the bits managed by state machine A.
-  uint16_t instr_a = pio_encode_set(pio_pins, value_pin_values & 0xF);
-
-  // Encode the PIO instruction that sets the bits managed by state machine B.
-  uint16_t instr_b = pio_encode_set(pio_pins, value_pin_values >> 4);
-
-  // Atomically store both instructions in the rom array.
-  rom[address_pin_values].store(((uint32_t)instr_b << 16) | instr_a);
+  // Atomically update the rom array.
+  rom[address_pin_values].store(value_pin_values);
 }
