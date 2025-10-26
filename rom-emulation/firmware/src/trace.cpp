@@ -10,7 +10,7 @@
 // as a 2-bit index in a jump table.
 static_assert(PIN_PSEN == PIN_ALE + 1, "PSEN and ALE must be consecutive");
 
-static const PIO pio = pio1;
+static const PIO pio = pio2;
 static constexpr uint sm = 0;
 
 void trace_setup() {
