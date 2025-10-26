@@ -1,8 +1,9 @@
 #include "romemu.h"
 
+#include <hardware/dma.h>
 #include <hardware/pio.h>
 #include <pico/binary_info.h>
-#include <pico/multicore.h>
+#include <pico/stdlib.h>
 
 #include <atomic>
 
@@ -34,188 +35,46 @@ static const PIO pio = pio0;
 static constexpr uint sm_out = 0;
 static constexpr uint sm_dira = 1;
 static constexpr uint sm_dirb = 2;
+static constexpr uint sm_latch = 3;
 
-// Doorbell resource, to make core1 jump to the given address.
-static constexpr uint db_restart_core1 = 0;
-static std::atomic<uintptr_t> db_restart_core1_target_address;
+// DMA resources.
+static constexpr uint dma_addr = 0;
+static constexpr uint dma_data = 1;
 
-static std::atomic<bool> core1_started = false;
-
-// ROM, stored as (pin-mapped address) -> (pin-mapped value)
-// in a dedicated RAM region exclusively accessed by core1 while romemu is
-// running.
+// ROM, stored as (pin-mapped address) -> (pin-mapped value).
 static constexpr uint ROM_SIZE = 64 * 1024;
-static std::atomic<uint8_t> rom[ROM_SIZE] [[gnu::section(
-    ".ram2_uninitialized_data")]];
+static std::atomic<uint8_t> rom[ROM_SIZE] [[gnu::aligned(ROM_SIZE)]];
 
-/*
- * This function is the core of the ROM emulation: it continuously senses the
- * input values on the GPIOs and selects what value to emit.
- *
- * Its execution is divided in two phases:
- * - Initial phase: we always reply with 0x00 (NOP). This phase ends as soon as
- *   address 0x0000 is latched. During this phase, the Minitel CPU will
- *   increment its program counter by 1 for each executed NOP (until 0xFFFF,
- *   after which it will wrap around to 0x0000).
- * - Operating phase: during this phase, we reply with the real ROM values.
- *
- * The initial "NOP slide" phase ensures that, no matter what program counter
- * the Minitel CPU happens to be at when we start, we let it safely reach the
- * ROM's entry point (address 0) without executing uncontrolled instructions.
- * This is necessary because we have no control over the Minitel CPU's reset
- * signal: the Minitel CPU might start to run before we are ready to serve the
- * ROM.
- *
- * Register usage
- * - Non-constant registers:
- *   - r0: Scratch register for short-lived values.
- *   - r1: Most recent GPIO readout.
- *   - r2: Most recent GPIO readout whose ALE bit was high. The lowest 16 bits
- *         of this register contain the latched address.
- *   - r3: Value to be emitted (only the lower 8 bits are meaningful).
- * - Constant values:
- *   - kAleToSign: Number to bits to left-shift a GPIO reading so that the ALE
- *                 bit (i.e. 1 << PIN_ALE) ends up at the position of the sign
- *                 bit (i.e. 1 << 31).
- * - Constant registers:
- *   - r6: Address of the "rom" array.
- *   - r8: Address of PIO's RXFIFO register sm_out.
- *
- * This function's code is stored in a RAM region that is exclusively accessed
- * by core1 (__scratch_x).
- */
-[[gnu::noinline, gnu::noreturn]]
-static void __scratch_x("romemu_worker_in_ram") core1_worker_task() {
-  constexpr uint kAleToSign = 31 - PIN_ALE;
-  register const std::atomic<uint8_t>* rom_in asm("r6") = rom;
-  register io_rw_32* data_out asm("r8") = &pio->rxf_putget[sm_out][0];
-
-  asm volatile(
-      // Load the value to serve at address 0, but don't emit it yet.
-      "ldrb r3, [r6, #0]\n"
-
-      // Initialize the latch with non-zero address bits.
-      "mov r2, #-1\n"
-
-      // Initial synchronization: latch the GPIOs if ALE is high and wait for
-      // ALE to become low *with address 0 latched*.
-      "b 2f\n"
-      "1:"                            // We only branch here if ALE is high.
-      "mov r2, r1\n"                  // Latch the current GPIO readout.
-      "2:\n"                          // This is the entry point of the loop.
-      "mrc p0, #0, r1, c0, c8\n"      // r1 = gpio_get_all()
-      "lsls r0, r1, %[kAleToSign]\n"  // Shift ALE into the sign position.
-      "bmi 1b\n"                      // Branch if ALE is high.
-      "uxth r0, r2\n"                 // Isolate the address bits.
-      "cmp r0, #0\n"                  // Is the latched address zero?
-      "bne 2b\n"                      // Keep waiting if not.
-
-      // If we are here, it means that address 0 has been latched and ALE is
-      // low. Serve the value at address 0.
-      "str r3, [r8]\n"  // Write into sm_out.
-
-      // Synchronization for subsequent instructions: latch the GPIOs if ALE is
-      // high and wait for ALE to become low.
-      "b 4f\n"
-      "3:"                            // We only branch here if ALE is high.
-      "mov r2, r1\n"                  // Latch the current GPIO readout.
-      "4:\n"                          // This is the entry point of the loop.
-      "mrc p0, #0, r1, c0, c8\n"      // r1 = gpio_get_all()
-      "lsls r0, r1, %[kAleToSign]\n"  // Shift ALE into the sign position.
-      "bmi 3b\n"                      // Branch if ALE is high.
-
-      // Serve the latched address.
-      "uxth r0, r2\n"        // Isolate the address bits.
-      "ldrb r3, [r6, r0]\n"  // Load from the "rom" array.
-      "str r3, [r8]\n"       // Write into sm_out.
-
-      // Repeat main loop.
-      "b 4b\n"
-      :
-      : [kAleToSign] "I"(kAleToSign), "r"(rom_in), "r"(data_out));
-
-  __builtin_unreachable();
-}
-
-[[gnu::noinline, gnu::noreturn]]
-static void __scratch_x("romemu_worker_in_ram") core1_idle_task() {
-  asm volatile(
-      "1:\n"
-      "wfe\n"
-      "b 1b\n");
-
-  __builtin_unreachable();
-}
-
-// This IRQ handler runs on core1 when db_restart_core1 is triggered by core0.
-//
-// Its goal is to make core1 stop the current task and switch to a different
-// one. In detail:
-// - It sets to ROM output value to zero to clear the effect of the interrupted
-//   task.
-// - It overwrites the program counter (PC) in the exception frame (that the CPU
-//   has just pushed on the stack before entering the IRQ handler) with the
-//   initial address of the new desired task.
-// - It clears the doorbell's flag.
-// - Finally, it returns. The CPU will pop the new PC from the exception frame
-//   on the stack and "return" to it, thus starting the new task.
-//
-// The layout of the exception frame is documented in "Arm Cortex-M33 Devices
-// Generic User Guide", section 2.3.7 "Exception entry and return".
-static void __scratch_x("romemu_worker_in_ram") core1_doorbell_irq() {
-  {
-    register uint32_t instr asm("r0") = 0x00; /* NOP */
-    register io_rw_32* data_out asm("r1") = &pio->rxf_putget[sm_out][0];
-    asm volatile("str r0, [r1]\n" ::"r"(instr), "r"(data_out));
-  }
-
-  {
-    register io_rw_32* doorbell_in_clr asm("r0") = &sio_hw->doorbell_in_clr;
-    register uint32_t doorbell_in_clr_mask asm("r1") = 1 << db_restart_core1;
-    register uintptr_t target_addr asm("r2") =
-        db_restart_core1_target_address.load();
-
-    asm volatile(
-        "str r2, [sp, #0x18]\n"  // Set the new PC in the exception frame.
-        "str r1, [r0]\n"         // Clear the doorbell.
-        ::"r"(doorbell_in_clr),
-        "r"(doorbell_in_clr_mask), "r"(target_addr));
-  }
-}
-
-[[gnu::noinline, gnu::noreturn]]
-static void __scratch_x("romemu_worker_in_ram") core1_entry_point() {
-  uint32_t irq = multicore_doorbell_irq_num(db_restart_core1);
-  irq_set_exclusive_handler(irq, core1_doorbell_irq);
-  irq_set_enabled(irq, true);
-
-  core1_started = true;
-
-  // Start the idle task.
-  core1_idle_task();
-}
-
-static void core1_restart(void (*new_task)(void)) {
-  db_restart_core1_target_address.store((uintptr_t)new_task);
-  multicore_doorbell_set_other_core(db_restart_core1);
-  while (multicore_doorbell_is_set_other_core(db_restart_core1)) {
-    tight_loop_contents();
-  }
-}
+// PC values to jump to activate/pause the sm_latch state machine.
+static uint pc_latch_paused, pc_latch_active;
 
 void romemu_setup() {
+  // Initially fill the emulated ROM contents with 0xFF. Note that, in fact, we
+  // will keep serving NOPs (0x00) until romemu_start is called.
+  for (uint i = 0; i < ROM_SIZE; i++) {
+    romemu_write(i, 0xFF);
+  }
+
   // Claim the resources that we will need.
   pio_sm_claim(pio, sm_out);
   pio_sm_claim(pio, sm_dira);
   pio_sm_claim(pio, sm_dirb);
-  multicore_doorbell_claim(db_restart_core1, 0b10);
+  pio_sm_claim(pio, sm_latch);
+  dma_channel_claim(dma_addr);
+  dma_channel_claim(dma_data);
 
   // Load the programs into the PIO engine.
   uint prog_out = pio_add_program(pio, &romemu_out_program);
   uint prog_dir = pio_add_program(pio, &romemu_dir_program);
+  uint prog_latch = pio_add_program(pio, &romemu_latch_program);
   pio_sm_config cfg_out = romemu_out_program_get_default_config(prog_out);
   pio_sm_config cfg_dira = romemu_dir_program_get_default_config(prog_dir);
   pio_sm_config cfg_dirb = romemu_dir_program_get_default_config(prog_dir);
+  pio_sm_config cfg_latch = romemu_latch_program_get_default_config(prog_latch);
+
+  // Remember the addresses of these two labels.
+  pc_latch_paused = prog_latch + romemu_latch_offset_paused;
+  pc_latch_active = prog_latch + romemu_latch_offset_active;
 
   // Assign pin numbers.
   sm_config_set_out_pins(&cfg_out, PIN_AD_BASE, 8);
@@ -224,6 +83,7 @@ void romemu_setup() {
   sm_config_set_jmp_pin(&cfg_dirb, PIN_PSEN);
   sm_config_set_sideset_pins(&cfg_dira, PIN_AD_BASE);
   sm_config_set_sideset_pins(&cfg_dirb, PIN_AD_BASE + 4);
+  sm_config_set_jmp_pin(&cfg_latch, PIN_ALE);
   pio_sm_set_consecutive_pindirs(pio, sm_dira, PIN_AD_BASE, 4, false);
   pio_sm_set_consecutive_pindirs(pio, sm_dirb, PIN_AD_BASE + 4, 4, false);
 
@@ -239,6 +99,29 @@ void romemu_setup() {
   for (int i = 0; i < 8; i++) {
     pio_gpio_init(pio, PIN_AD_BASE + i);
   }
+
+  // Setup chained DMA: dma_addr will read the address latched by sm_latch and
+  // then immediately trigger dma_data, which reads from it and then pushes the
+  // value to sm_out.
+  dma_channel_config_t cfg_addr = dma_channel_get_default_config(dma_addr);
+  dma_channel_config_t cfg_data = dma_channel_get_default_config(dma_data);
+  channel_config_set_transfer_data_size(&cfg_addr, DMA_SIZE_32);
+  channel_config_set_read_increment(&cfg_addr, false);
+  channel_config_set_write_increment(&cfg_addr, false);
+  channel_config_set_dreq(&cfg_addr, pio_get_dreq(pio, sm_latch, false));
+  channel_config_set_high_priority(&cfg_addr, true);
+  channel_config_set_transfer_data_size(&cfg_data, DMA_SIZE_8);
+  channel_config_set_read_increment(&cfg_data, false);
+  channel_config_set_write_increment(&cfg_data, false);
+  channel_config_set_dreq(&cfg_data, pio_get_dreq(pio, sm_out, true));
+  channel_config_set_chain_to(&cfg_data, dma_addr);
+  channel_config_set_high_priority(&cfg_data, true);
+  dma_channel_configure(
+      dma_addr, &cfg_addr, &dma_hw->ch[dma_data].al3_read_addr_trig,
+      &pio->rxf[sm_latch], dma_encode_transfer_count(1), false);
+  dma_channel_configure(dma_data, &cfg_data, &pio->rxf_putget[sm_out][0],
+                        nullptr /* set by dma_addr */,
+                        dma_encode_transfer_count(1), false);
 
   // Take control of the NOPEN output pin (which is externally pulled-down).
   // Let's start with maintaining 0 as an output, so that the SN74HCT541 doesn't
@@ -267,11 +150,17 @@ void romemu_setup() {
   // that the initial output value of 0x00 has propagated.
   uint out_entry_point = prog_out + romemu_out_offset_entry_point;
   uint dir_entry_point = prog_dir + romemu_dir_offset_entry_point;
+  uint latch_entry_point = prog_latch + romemu_latch_offset_entry_point;
   pio_sm_init(pio, sm_out, out_entry_point, &cfg_out);
   pio_sm_init(pio, sm_dira, dir_entry_point, &cfg_dira);
   pio_sm_init(pio, sm_dirb, dir_entry_point, &cfg_dirb);
+  pio_sm_init(pio, sm_latch, latch_entry_point, &cfg_latch);
   pio_enable_sm_mask_in_sync(pio, 1 << sm_out);
-  pio_enable_sm_mask_in_sync(pio, (1 << sm_dira) | (1 << sm_dirb));
+  pio_enable_sm_mask_in_sync(pio,
+                             (1 << sm_dira) | (1 << sm_dirb) | (1 << sm_latch));
+
+  // Set prefix in sm_latch, which will now start spinning in the "paused" loop.
+  pio_sm_put(pio, sm_latch, (uintptr_t)rom >> 16);
 
   // With the state machines now running, we are now emitting NOPs (0x00) too.
   // We can tell the SN74HCT541 to stop emitting its own NOPs.
@@ -281,29 +170,43 @@ void romemu_setup() {
   // Give SN74HCT541 extra time to fully deactivate. After this, we can emit
   // non-0x00 values without conflicting with it.
   sleep_us(100);
-
-  // Initially fill the emulated ROM contents with 0xFF. Note that, in fact, we
-  // will keep serving NOPs (0x00) until romemu_start is called.
-  for (uint i = 0; i < ROM_SIZE; i++) {
-    romemu_write(i, 0xFF);
-  }
-
-  // Start the worker function on core1, dedicated to this task.
-  multicore_launch_core1(core1_entry_point);
-
-  // Wait until we are sure that core1 is running entirely out of RAM. This is
-  // necessary because, after this function returns, core0 might start a flash
-  // erase/program operation at any time, if asked to do so by the client
-  // protocol, and core1 would get a bus fault if it tried to fetch anything
-  // from flash at the same time.
-  while (!core1_started) {
-    tight_loop_contents();
-  }
 }
 
-void romemu_start() { core1_restart(core1_worker_task); }
+void romemu_start() {
+  // Start the DMA engine too.
+  dma_channel_start(dma_addr);
 
-void romemu_stop() { core1_restart(core1_idle_task); }
+  // Start the state machine that emits latched addresses.
+  pio_sm_exec(pio, sm_latch, pio_encode_jmp(pc_latch_active));
+}
+
+void romemu_stop() {
+  // Save the current values of the CTRL register of both DMA channels.
+  uint32_t old_ctrl_addr = dma_channel_hw_addr(dma_addr)->al1_ctrl;
+  uint32_t old_ctrl_data = dma_channel_hw_addr(dma_data)->al1_ctrl;
+
+  // Stop triggering.
+  pio_sm_exec(pio, sm_latch, pio_encode_jmp(pc_latch_paused));
+  while (pio->sm[sm_latch].addr != pc_latch_paused) {
+    tight_loop_contents();
+  }
+
+  // Stop the DMA engine (with workaround for errata RP2350-E5).
+  dma_channel_hw_addr(dma_addr)->al1_ctrl = old_ctrl_addr & ~1;  // clear EN bit
+  dma_channel_hw_addr(dma_data)->al1_ctrl = old_ctrl_data & ~1;  // clear EN bit
+  dma_hw->abort = (1 << dma_addr) | (1 << dma_data);
+  while (dma_hw->abort != 0) {
+    tight_loop_contents();
+  }
+
+  // Start emitting 0x00 (NOPs) again.
+  pio->rxf_putget[sm_out][0] = 0x00;
+
+  // Undo the workaround for errata RP2350-E5 and make the channels ready to
+  // be re-triggered.
+  dma_channel_hw_addr(dma_addr)->al1_ctrl = old_ctrl_addr;
+  dma_channel_hw_addr(dma_data)->al1_ctrl = old_ctrl_data;
+}
 
 void romemu_write(uint16_t address, uint8_t value) {
   // Transform the logical address and value into the corresponding pin-mapped

@@ -393,9 +393,9 @@ static void load_rom_from_data_partition() {
 }
 
 int main() {
-  // Give core1 (the CPU that will serve the ROM) priority access to the RAM,
-  // so that it's never stalled.
-  busctrl_hw->priority = BUSCTRL_BUS_PRIORITY_PROC1_BITS;
+  // Give DMA reads (that will serve the ROM) priority access to the RAM, so
+  // that they are never stalled.
+  busctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
 
   // Take over the duty of responding to PSEN requests from the SN74HCT541 to
   // ourselves.

@@ -31,11 +31,11 @@ target_include_directories(rom-emulator PRIVATE
 
 target_link_libraries(rom-emulator PRIVATE
   boot_uf2_headers
+  hardware_dma
   hardware_flash
   hardware_pio
   hardware_pwm
   pico_bootrom
-  pico_multicore
   pico_stdlib
 )
 
@@ -56,28 +56,6 @@ add_custom_target(pin-map
   SOURCES ../scripts/generate-pin-map.py
 )
 add_dependencies(rom-emulator pin-map)
-
-# Generate our custom linker script by patching the one in the SDK.
-add_custom_command(
-  OUTPUT linker-script.ld
-  COMMAND
-    ${Python3_EXECUTABLE}
-  ARGS
-    ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/generate-linker-script.py
-    ${PICO_SDK_PATH}
-    linker-script.ld
-  DEPENDS ../scripts/generate-linker-script.py
-  DEPENDS ${PICO_SDK_PATH}/src/rp2_common/pico_crt0/rp2350/memmap_default.ld
-  VERBATIM
-)
-add_custom_target(linker-script
-  DEPENDS linker-script.ld
-  SOURCES ../scripts/generate-linker-script.py
-)
-add_dependencies(rom-emulator linker-script)
-pico_set_linker_script(rom-emulator
-  ${CMAKE_CURRENT_BINARY_DIR}/linker-script.ld
-)
 
 if(ROM_EMULATOR_IS_INTERACTIVE)
   # Interactive mode requires partitioning. Call our script to create a special
