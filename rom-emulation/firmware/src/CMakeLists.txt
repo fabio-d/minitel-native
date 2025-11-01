@@ -8,8 +8,15 @@ add_executable(rom-emulator
   trace.cpp
 )
 
+if(ROM_EMULATOR_PROVIDES_RAM)
+  set(MEMEMU_VARIANT with-ram)
+else()
+  set(MEMEMU_VARIANT without-ram)
+endif()
+
 pico_generate_pio_header(rom-emulator
-  ${CMAKE_CURRENT_SOURCE_DIR}/mememu.pio
+  ${CMAKE_CURRENT_SOURCE_DIR}/mememu-common.pio
+  ${CMAKE_CURRENT_SOURCE_DIR}/mememu-${MEMEMU_VARIANT}.pio
   ${CMAKE_CURRENT_SOURCE_DIR}/trace.pio
 )
 
@@ -23,6 +30,7 @@ target_compile_definitions(rom-emulator PRIVATE
   "-DMINITEL_MODEL_FEATURE=\"Minitel model ${MINITEL_MODEL}\""
   "-DROM_EMULATOR_IS_INTERACTIVE=${ROM_EMULATOR_IS_INTERACTIVE}"
   "-DROM_EMULATOR_HAS_BUS_SWITCH=${ROM_EMULATOR_HAS_BUS_SWITCH}"
+  "-DROM_EMULATOR_PROVIDES_RAM=${ROM_EMULATOR_PROVIDES_RAM}"
 )
 
 target_include_directories(rom-emulator PRIVATE
@@ -37,6 +45,7 @@ target_link_libraries(rom-emulator PRIVATE
   hardware_pio
   hardware_pwm
   pico_bootrom
+  pico_multicore
   pico_stdlib
 )
 
@@ -50,6 +59,7 @@ add_custom_command(
     ${PINOUT}
     pin-map.h
     $<${ROM_EMULATOR_HAS_BUS_SWITCH}:--with-bus-switch>
+    $<${ROM_EMULATOR_PROVIDES_RAM}:--with-ram-controls>
   DEPENDS ../scripts/generate-pin-map.py
 )
 add_custom_target(pin-map

@@ -3,12 +3,19 @@
 #include <hardware/dma.h>
 #include <hardware/pio.h>
 #include <pico/binary_info.h>
+#include <pico/multicore.h>
 #include <pico/stdlib.h>
 
 #include <atomic>
 
-#include "mememu.pio.h"
+#include "mememu-common.pio.h"
 #include "pin-map.h"
+
+#if ROM_EMULATOR_PROVIDES_RAM == 1
+#include "mememu-with-ram.pio.h"
+#else
+#include "mememu-without-ram.pio.h"
+#endif
 
 static constexpr uint32_t PIN_ADDR_AD_MASK =
     (1 << PIN_AD0) | (1 << PIN_AD1) | (1 << PIN_AD2) | (1 << PIN_AD3) |
@@ -34,6 +41,19 @@ bi_decl(bi_1pin_with_name(PIN_NOPEN, "~NOPEN"));
 bi_decl(bi_1pin_with_name(PIN_BUSEN, "~BUSEN"));
 #endif
 
+#if ROM_EMULATOR_PROVIDES_RAM == 1
+// We emulate an active-high RAM, selected by A15.
+static constexpr uint PIN_RAM_EN = PIN_A15;
+bi_decl(bi_program_feature("Emulated RAM, selected by A15=HIGH"));
+bi_decl(bi_1pin_with_name(PIN_WR, "~WR"));
+bi_decl(bi_1pin_with_name(PIN_RD, "~RD"));
+
+// The mememu_dir PIO program requires PSEN, WR and RD to be consecutive,
+// because it uses them as a 3-bit index in a jump table.
+static_assert(PIN_WR == PIN_PSEN + 1 && PIN_RD == PIN_PSEN + 2,
+              "PSEN, WR and RD must be consecutive");
+#endif
+
 // PIO resources.
 static const PIO pio_serve = pio0;
 static constexpr uint sm_out = 0;
@@ -46,17 +66,49 @@ static constexpr uint sm_latch = 0;
 static constexpr uint dma_addr = 0;
 static constexpr uint dma_data = 1;
 
-// ROM, stored as (pin-mapped address) -> (pin-mapped value).
-static std::atomic<uint8_t> rom[MAX_MEM_SIZE] [[gnu::aligned(MAX_MEM_SIZE)]];
+// ROM and RAM contents, stored as consecutive pairs:
+// - (2 * pin-mapped address + 0) -> (pin-mapped RAM value)
+// - (2 * pin-mapped address + 1) -> (pin-mapped ROM value)
+static constexpr uint MEMARRAY_SHIFT = 17;
+static constexpr uint MEMARRAY_SIZE = 2 * MAX_MEM_SIZE;  // ROM + RAM
+static std::atomic<uint8_t> mem[MEMARRAY_SIZE] [[gnu::aligned(MEMARRAY_SIZE)]];
+static_assert(MEMARRAY_SIZE == 1 << MEMARRAY_SHIFT);
 
 // PC values to jump to activate/pause the sm_latch state machine.
 static uint pc_latch_paused, pc_latch_active;
 
+[[gnu::noinline, gnu::noreturn]]
+static void __scratch_x("core1_worker_task") core1_worker_task() {
+  while (true) {
+#if ROM_EMULATOR_PROVIDES_RAM == 1
+    // Wait for WR to go low.
+    uint32_t value;
+    do {
+      value = gpio_get_all();
+    } while ((value & (1 << PIN_WR)) != 0);
+
+    // Get the latched address.
+    auto storage = (std::atomic<uint8_t>*)dma_hw->ch[dma_data].al1_read_addr;
+
+    // Write the new RAM value into the mem array.
+    *storage = value >> PIN_AD_BASE;
+
+    // Wait for WR to go high.
+    do {
+      value = gpio_get_all();
+    } while ((value & (1 << PIN_WR)) == 0);
+#else
+    __wfe();
+#endif
+  }
+}
+
 void mememu_setup() {
-  // Initially fill the emulated ROM contents with 0xFF. Note that, in fact, we
-  // will keep serving NOPs (0x00) until mememu_start is called.
+  // Initially fill the emulated ROM and RAM contents with 0xFF. Note that, in
+  // fact, we will keep serving 0x00 until mememu_start is called.
   for (uint i = 0; i < MAX_MEM_SIZE; i++) {
     mememu_write_rom(i, 0xFF);
+    mememu_write_ram(i, 0xFF);
   }
 
   // Claim the resources that we will need.
@@ -83,13 +135,18 @@ void mememu_setup() {
   // Assign pin numbers.
   sm_config_set_out_pins(&cfg_out, PIN_AD_BASE, 8);
   sm_config_set_set_pins(&cfg_out, PIN_AD_BASE, 8);
-  sm_config_set_jmp_pin(&cfg_dira, PIN_PSEN);
-  sm_config_set_jmp_pin(&cfg_dirb, PIN_PSEN);
+  sm_config_set_in_pin_base(&cfg_dira, PIN_PSEN);
+  sm_config_set_in_pin_base(&cfg_dirb, PIN_PSEN);
   sm_config_set_sideset_pins(&cfg_dira, PIN_AD_BASE);
   sm_config_set_sideset_pins(&cfg_dirb, PIN_AD_BASE + 4);
   sm_config_set_jmp_pin(&cfg_latch, PIN_ALE);
   pio_sm_set_consecutive_pindirs(pio_serve, sm_dira, PIN_AD_BASE, 4, false);
   pio_sm_set_consecutive_pindirs(pio_serve, sm_dirb, PIN_AD_BASE + 4, 4, false);
+#if ROM_EMULATOR_PROVIDES_RAM == 1
+  sm_config_set_jmp_pin(&cfg_out, PIN_RD);
+  sm_config_set_jmp_pin(&cfg_dira, PIN_RAM_EN);
+  sm_config_set_jmp_pin(&cfg_dirb, PIN_RAM_EN);
+#endif
 
   // Set the initial output value to zero, for two reasons:
   // - an all-zero value is interpreted by the Minitel CPU as a (harmless) NOP,
@@ -97,7 +154,7 @@ void mememu_setup() {
   // - to avoid bus conflicts while taking over from the SN74HCT541, as it emits
   //   zeros too.
   pio_sm_set_pins(pio_serve, sm_out, 0x00);
-  pio_serve->rxf_putget[sm_out][0] = 0x00;
+  pio_serve->rxf_putget[sm_out][0] = 0x0000;
 
   // Claim tristate GPIOs.
   for (int i = 0; i < 8; i++) {
@@ -114,7 +171,8 @@ void mememu_setup() {
   channel_config_set_write_increment(&cfg_addr, false);
   channel_config_set_dreq(&cfg_addr, pio_get_dreq(pio_sense, sm_latch, false));
   channel_config_set_high_priority(&cfg_addr, true);
-  channel_config_set_transfer_data_size(&cfg_data, DMA_SIZE_8);
+  channel_config_set_transfer_data_size(&cfg_data, DMA_SIZE_16);
+  channel_config_set_bswap(&cfg_data, true);
   channel_config_set_read_increment(&cfg_data, false);
   channel_config_set_write_increment(&cfg_data, false);
   channel_config_set_dreq(&cfg_data, pio_get_dreq(pio_serve, sm_out, true));
@@ -124,7 +182,7 @@ void mememu_setup() {
       dma_addr, &cfg_addr, &dma_hw->ch[dma_data].al3_read_addr_trig,
       &pio_sense->rxf[sm_latch], dma_encode_transfer_count(1), false);
   dma_channel_configure(dma_data, &cfg_data, &pio_serve->rxf_putget[sm_out][0],
-                        nullptr /* set by dma_addr */,
+                        &mem /* set at runtime by dma_addr */,
                         dma_encode_transfer_count(1), false);
 
 #if ROM_EMULATOR_HAS_BUS_SWITCH == 1
@@ -149,6 +207,12 @@ void mememu_setup() {
   gpio_set_dir(PIN_ALE, GPIO_IN);
   gpio_init(PIN_PSEN);
   gpio_set_dir(PIN_PSEN, GPIO_IN);
+#if ROM_EMULATOR_PROVIDES_RAM == 1
+  gpio_init(PIN_WR);
+  gpio_set_dir(PIN_WR, GPIO_IN);
+  gpio_init(PIN_RD);
+  gpio_set_dir(PIN_RD, GPIO_IN);
+#endif
   gpio_init_mask(PIN_ADDR_A_MASK);
   gpio_set_dir_in_masked(PIN_ADDR_A_MASK);
 
@@ -167,10 +231,14 @@ void mememu_setup() {
 
   // Set prefix in sm_latch and wait until it starts spinning in the "paused"
   // loop.
-  pio_sm_put(pio_sense, sm_latch, (uintptr_t)rom >> 16);
+  pio_sm_put(pio_sense, sm_latch, (uintptr_t)mem >> MEMARRAY_SHIFT);
   while (pio_sense->sm[sm_latch].addr != pc_latch_paused) {
     tight_loop_contents();
   }
+
+  // Start the worker function on core 1, dedicated to processing writes to the
+  // emulated RAM.
+  multicore_launch_core1(core1_worker_task);
 
 #if ROM_EMULATOR_HAS_BUS_SWITCH == 1
   // With the state machines now running, we are now emitting NOPs (0x00) too.
@@ -211,8 +279,8 @@ void mememu_stop() {
     tight_loop_contents();
   }
 
-  // Start emitting 0x00 (NOPs) again.
-  pio_serve->rxf_putget[sm_out][0] = 0x00;
+  // Start emitting 0x00 again.
+  pio_serve->rxf_putget[sm_out][0] = 0x0000;
 
   // Undo the workaround for errata RP2350-E5 and make the channels ready to
   // be re-triggered.
@@ -226,6 +294,16 @@ void mememu_write_rom(uint16_t address, uint8_t value) {
   uint16_t address_pin_values = pin_map_address(address);
   uint8_t value_pin_values = pin_map_data(value);
 
-  // Atomically update the rom array.
-  rom[address_pin_values].store(value_pin_values);
+  // Atomically update the mem array.
+  mem[2 * address_pin_values + 1].store(value_pin_values);
+}
+
+void mememu_write_ram(uint16_t address, uint8_t value) {
+  // Transform the logical address and value into the corresponding pin-mapped
+  // permutation.
+  uint16_t address_pin_values = pin_map_address(address);
+  uint8_t value_pin_values = pin_map_data(value);
+
+  // Atomically update the mem array.
+  mem[2 * address_pin_values + 0].store(value_pin_values);
 }

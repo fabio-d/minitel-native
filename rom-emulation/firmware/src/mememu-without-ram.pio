@@ -1,0 +1,52 @@
+.program mememu_dir
+; This program sets the direction of the AD pins, but not the value, which is
+; controlled by `mememu_out` program above. It keeps the 4 sideset pins
+; configured as outputs for as long as the PSEN line is low.
+; It is meant to be instantiated twice, with 4 out of the 8 AD pins controlled
+; separately by each instance.
+.side_set 4 opt pindirs
+
+; Run at full speed.
+.clock_div 1
+
+; This needs the value of PSEN.
+.in 1
+
+PUBLIC entry_point:
+.wrap_target
+; Configure the pins as inputs and wait for PSEN to become low.
+wait 0 pin 0        side 0b0000
+
+; Wait for the bus to be released by the Minitel's CPU.
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+
+; Configure the pins as outputs and wait for PSEN to become high again.
+wait 1 pin 0        side 0b1111
+.wrap
+
+; ------------------------------------------------------------------------------
+
+.program mememu_out
+; This program sets the output value of the 8 AD pins, but not the direction,
+; which is controlled by `mememu_dir` program below.
+.out 8
+
+; Run at full speed.
+.clock_div 1
+
+; The value to be emitted is taken from the FIFO in random-access mode.
+.fifo txget
+
+PUBLIC entry_point:
+; Infinite loop that reads from the FIFO and sets the pins' output value.
+.wrap_target
+mov osr, rxfifo[0]
+out pins, 8
+.wrap

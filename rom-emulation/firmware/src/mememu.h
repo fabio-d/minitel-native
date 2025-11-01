@@ -20,4 +20,7 @@ void mememu_stop();
 // Sets one byte of the emulated ROM.
 void mememu_write_rom(uint16_t address, uint8_t value);
 
+// Sets one byte of the emulated RAM.
+void mememu_write_ram(uint16_t address, uint8_t value);
+
 #endif

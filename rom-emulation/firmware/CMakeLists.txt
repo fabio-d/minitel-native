@@ -26,6 +26,7 @@ pico_sdk_init()
 # Select the Minitel model and the pinout of our connections to the bus.
 set(MINITEL_MODEL "" CACHE STRING "Minitel model that will host the ROM emulator")
 set(ROM_EMULATOR_HAS_BUS_SWITCH 0)
+set(ROM_EMULATOR_PROVIDES_RAM 0)
 if(NOT MINITEL_MODEL)
   message(FATAL_ERROR "Please set cmake ... -DMINITEL_MODEL=...")
 elseif(MINITEL_MODEL STREQUAL "nfz330")  # via board_nfz330_nfz400
@@ -34,6 +35,11 @@ elseif(MINITEL_MODEL STREQUAL "nfz330")  # via board_nfz330_nfz400
 elseif(MINITEL_MODEL STREQUAL "nfz400")  # via board_nfz330_nfz400
   set(PINOUT "A15,A10,A11,A9,A8,A13,A14,A12,AD0,AD1,AD2,AD3,AD4,AD5,AD6,AD7,,NOPEN,BUSEN,ALE,PSEN")
   set(ROM_EMULATOR_HAS_BUS_SWITCH 1)
+elseif(MINITEL_MODEL STREQUAL "nfz400+ram")  # via board_nfz330_nfz400
+  set(MINITEL_MODEL nfz400)
+  set(PINOUT "A15,A10,A11,A9,A8,A13,A14,A12,AD0,AD1,AD2,AD3,AD4,AD5,AD6,AD7,,NOPEN,BUSEN,ALE,PSEN,WR,RD")
+  set(ROM_EMULATOR_HAS_BUS_SWITCH 1)
+  set(ROM_EMULATOR_PROVIDES_RAM 1)
 elseif(MINITEL_MODEL MATCHES "justrom:(.*)")
   set(MINITEL_MODEL justrom)
   set(PINOUT "${CMAKE_MATCH_1}")

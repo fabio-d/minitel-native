@@ -1,0 +1,50 @@
+.program mememu_latch
+; This program "latches" the address according to ALE and emits it to the FIFO
+; on the falling edge. The emitted address is prefixed with a constant value and
+; multiplied by 2, to form a pointer for DMA chaining.
+;
+; This program is instantiated with jmppin = ALE.
+.in 16 left auto 32
+
+; Run at full speed.
+.clock_div 1
+
+PUBLIC entry_point:
+; Store the prefix into OSR (which, from now on, will stay constant).
+pull
+
+; Initially just wait in a loop for C++ to move the PC to the "active" label.
+; Note that C++ code can jump back to this label at any time.
+PUBLIC paused:
+jmp paused
+
+; C++ code can force jumping to this label at any time. Let's be sure to start
+; from a clean state and reset the ISR shift counter to 0.
+PUBLIC active:
+mov isr, null
+
+; First phase: wait for address 0x0000 to be fetched.
+; During this phase any address other than 0x0000 is ignored.
+in osr, 15
+wait_zero_loop:
+wait 1 jmppin
+ale_is_high_loop1:
+mov x, y
+mov y, pins
+jmp pin ale_is_high_loop1
+jmp x-- wait_zero_loop    ; keep waiting if x != 0
+in null, 17
+
+; Second phase (operational): all addresses are accepted.
+; The timing of this loop intentionally matches the one in the previous phase,
+; to minimize the chances of hard-to-reproduce issues due to differences.
+.wrap_target
+in osr, 15
+wait 1 jmppin
+ale_is_high_loop2:
+mov x, y
+mov y, pins
+jmp pin ale_is_high_loop2
+in x, 16
+in null, 1
+.wrap

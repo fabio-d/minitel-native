@@ -393,9 +393,11 @@ static void load_rom_from_data_partition() {
 }
 
 int main() {
-  // Give DMA reads (that will serve the ROM) priority access to the RAM, so
-  // that they are never stalled.
-  busctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
+  // Give core 1 (that will write into the emulated RAM) and DMA reads (that
+  // will serve the emulated ROM and RAM) priority access, so that they are
+  // never stalled.
+  busctrl_hw->priority =
+      BUSCTRL_BUS_PRIORITY_PROC1_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
 
   // Take over the duty of responding to PSEN requests from the SN74HCT541 to
   // ourselves.

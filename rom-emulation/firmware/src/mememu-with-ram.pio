@@ -1,0 +1,84 @@
+.program mememu_dir
+; This program sets the direction of the AD pins, but not the value, which is
+; controlled by `mememu_out` program above. It keeps the 4 sideset pins
+; configured as outputs for as long as the PSEN or RD line is low.
+; It is meant to be instantiated twice, with 4 out of the 8 AD pins controlled
+; separately by each instance.
+.side_set 4 opt pindirs
+
+; Run at full speed.
+.clock_div 1
+
+; This program uses the value of RD, WR, PSEN as a jump table.
+.origin 0
+.in 3
+
+jump_table:
+mov pc, pins        ; RD=0 WR=0 PSEN=0: impossible, let's keep checking
+mov pc, pins        ; RD=0 WR=0 PSEN=1: impossible, let's keep checking
+mov pc, pins        ; RD=0 WR=1 PSEN=0: impossible, let's keep checking
+jmp rd_is_low       ; RD=0 WR=1 PSEN=1: RAM being read
+mov pc, pins        ; RD=1 WR=0 PSEN=0: impossible, let's keep checking
+mov pc, pins        ; RD=1 WR=0 PSEN=1: RAM being written, nothing to do for us
+jmp psen_is_low     ; RD=1 WR=1 PSEN=0: ROM being fetched
+mov pc, pins        ; RD=1 WR=1 PSEN=1: idle, let's keep checking
+
+psen_is_low:
+; Wait for the bus to be released by the Minitel's CPU.
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+
+; Configure the pins as outputs and wait for PSEN to become high again.
+wait 1 pin 0        side 0b1111
+jmp jump_table      side 0b0000
+
+rd_is_low:
+; If the RAM's enable line is low, stay in high impedence.
+; Note that the RAM we emulate is active-high!
+jmp pin do_serve_ram
+jmp jump_table
+
+; Wait for the bus to be released by the Minitel's CPU.
+do_serve_ram:
+nop
+nop
+nop
+nop
+nop
+nop
+
+; Configure the pins as outputs and wait for RD to become high again.
+wait 1 pin 2        side 0b1111
+PUBLIC entry_point:
+jmp jump_table      side 0b0000
+
+; ------------------------------------------------------------------------------
+
+.program mememu_out
+; This program sets the output value of the 8 AD pins, but not the direction,
+; which is controlled by `mememu_dir` program below.
+.out 8
+
+; Run at full speed.
+.clock_div 1
+
+; The value to be emitted is taken from the FIFO in random-access mode.
+; It is a 16-bit value:
+; - The lower 8 bits contain the value of the ROM at the current address
+; - The upper 8 bits contain the value of the RAM at the current address
+.fifo txget
+
+PUBLIC entry_point:
+; Infinite loop that reads from the FIFO and sets the pins' output value.
+.wrap_target
+mov osr, rxfifo[0]
+jmp pin flush       ; If RD=0 (i.e. ROM access), emit the lower 8 bits
+out null, 8         ; Otherwise, if RD=1 (i.e. RAM access), emit the top 8 bits.
+flush:
+out pins, 8
+.wrap

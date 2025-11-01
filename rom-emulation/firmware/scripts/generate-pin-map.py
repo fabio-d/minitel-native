@@ -10,7 +10,7 @@ from pathlib import Path
 #
 # Due to limitations of the PIO programs:
 # - AD lines must be clustered next to each other
-# - ALE and PSEN must be consecutive
+# - ALE and PSEN (and WR and RD, if present) must be consecutive
 
 
 class BusSpecialFunction(enum.Enum):
@@ -18,6 +18,8 @@ class BusSpecialFunction(enum.Enum):
     BUSEN = enum.auto()
     ALE = enum.auto()
     PSEN = enum.auto()
+    WR = enum.auto()
+    RD = enum.auto()
 
 
 class BusLine:
@@ -75,7 +77,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("input_busnames")
 parser.add_argument("output_path", type=Path)
 # optional features
-parser.add_argument("--with-bus-switch", action='store_true')
+parser.add_argument("--with-bus-switch", action="store_true")
+parser.add_argument("--with-ram-controls", action="store_true")
 
 args = parser.parse_args()
 
@@ -88,6 +91,9 @@ busname_to_busid = {
 if args.with_bus_switch:
     busname_to_busid["NOPEN"] = BusSpecialFunction.NOPEN
     busname_to_busid["BUSEN"] = BusSpecialFunction.BUSEN
+if args.with_ram_controls:
+    busname_to_busid["WR"] = BusSpecialFunction.WR
+    busname_to_busid["RD"] = BusSpecialFunction.RD
 for n in [0, 1, 2, 3, 4, 5, 6, 7]:
     busname_to_busid[f"AD{n}"] = n
 for n in [8, 9, 10, 11, 12, 13, 14, 15]:
@@ -126,6 +132,11 @@ ale_gpioid = busid2gpioid(buslines, BusSpecialFunction.ALE)
 psen_gpioid = busid2gpioid(buslines, BusSpecialFunction.PSEN)
 if ale_gpioid + 1 != psen_gpioid:
     exit("The ALE and PSEN lines must consecutive")
+if args.with_ram_controls:
+    wr_gpioid = busid2gpioid(buslines, BusSpecialFunction.WR)
+    rd_gpioid = busid2gpioid(buslines, BusSpecialFunction.RD)
+    if ale_gpioid + 2 != wr_gpioid or ale_gpioid + 3 != rd_gpioid:
+        exit("The ALE, PSEN, WR and RD lines must be consecutive")
 
 pin_map_data = "// Permutation function for data bits.\n"
 pin_map_data += generate_permutation_function(
