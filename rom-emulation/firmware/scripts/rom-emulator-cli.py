@@ -322,7 +322,7 @@ def main():
         name="store",
         help="Stores a new ROM into flash memory.",
         epilog=(
-            "Note: the previously stored ROM at the selected slot will be "
+            "Note: the ROM previously stored at the selected slot will be "
             "implicitly erased, if present, without warning."
         ),
     )
