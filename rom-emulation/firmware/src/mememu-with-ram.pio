@@ -77,8 +77,8 @@ PUBLIC entry_point:
 ; Infinite loop that reads from the FIFO and sets the pins' output value.
 .wrap_target
 mov osr, rxfifo[0]
-jmp pin flush       ; If RD=0 (i.e. ROM access), emit the lower 8 bits
-out null, 8         ; Otherwise, if RD=1 (i.e. RAM access), emit the top 8 bits.
+jmp pin flush       ; If RD=1 (i.e. not RAM read), emit the lower 8 bits
+out null, 8         ; Otherwise, if RD=0 (i.e. RAM read), emit the top 8 bits.
 flush:
 out pins, 8
 .wrap

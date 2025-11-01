@@ -216,8 +216,7 @@ void mememu_setup() {
   gpio_init_mask(PIN_ADDR_A_MASK);
   gpio_set_dir_in_masked(PIN_ADDR_A_MASK);
 
-  // Start the state machines. Start sm_out first and then wait a bit to be sure
-  // that the initial output value of 0x00 has propagated.
+  // Initialize and start the state machines.
   uint out_entry_point = prog_out + mememu_out_offset_entry_point;
   uint dir_entry_point = prog_dir + mememu_dir_offset_entry_point;
   uint latch_entry_point = prog_latch + mememu_latch_offset_entry_point;
