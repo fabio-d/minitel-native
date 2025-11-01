@@ -153,8 +153,7 @@ void mememu_setup() {
   //   which safely "parks" it until we start serving the real ROM.
   // - to avoid bus conflicts while taking over from the SN74HCT541, as it emits
   //   zeros too.
-  pio_sm_set_pins(pio_serve, sm_out, 0x00);
-  pio_serve->rxf_putget[sm_out][0] = 0x0000;
+  pio_sm_set_pins(pio_serve, sm_out, pin_map_data(0x00) << PIN_AD_BASE);
 
   // Claim tristate GPIOs.
   for (int i = 0; i < 8; i++) {
@@ -224,6 +223,7 @@ void mememu_setup() {
   pio_sm_init(pio_serve, sm_dira, dir_entry_point, &cfg_dira);
   pio_sm_init(pio_serve, sm_dirb, dir_entry_point, &cfg_dirb);
   pio_sm_init(pio_sense, sm_latch, latch_entry_point, &cfg_latch);
+  pio_serve->rxf_putget[sm_out][0] = 0x0000;  // must be done after pio_sm_init!
   pio_enable_sm_mask_in_sync(pio_serve, 1 << sm_out);
   pio_enable_sm_mask_in_sync(pio_serve, (1 << sm_dira) | (1 << sm_dirb));
   pio_enable_sm_mask_in_sync(pio_sense, 1 << sm_latch);
