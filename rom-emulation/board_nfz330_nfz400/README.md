@@ -121,20 +121,13 @@ makes it act as a pull-down rather than a pull-up.
 <img src="pictures/nfz400_installed.jpg" width="50%" />
 </p>
 
-Installation is straightforward: after removing the old ROM, insert the board
-in the proper orientation. Please note that this connector seems to be very
-prone to poor contact. A good solution is to slightly pre-bend the adapter
-board's pins in alternating directions:
+Installation is straightforward: after removing the old ROM, insert the board in
+the proper orientation. It takes a moderate amount of force to push the pins
+fully inside the socket.
 
-<p align="center">
-<img src="pictures/nfz400_bend.jpg" width="40%" />
-</p>
-
-After insertion, it is strongly advised to check continuity with a multimeter
-between the adapter board's pins, whose solder joints are accessible from the
-top side after removing the Pico, and the corresponding CPU pins. Good `PSEN`
-contact is especially important to avoid electrical damage due to bus conflicts.
-Note that some pins are not connected, see the [Pinout](#pinout) below.
+It is probably a good idea to temporarily extract the Minitel's logic board and
+perform the operation on a flat rigid surface, to avoid flexing it while
+pushing.
 
 ## Schematic
 
