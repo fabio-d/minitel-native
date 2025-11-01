@@ -1,5 +1,6 @@
 #include "magic-io.h"
 
+#include <8052.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -28,8 +29,75 @@ MAGIC_IO_DESIRED_STATE_t magic_io_get_desired_state(void) {
 }
 
 void magic_io_jump_to_trampoline(void) {
-  // Jump to the fixed address where the trampoline is.
-  __asm__("ljmp 0xFFFD");
+  // Set registers back to their reset values and jump to the fixed address
+  // where the trampoline is.
+
+  IE = 0x00;
+  SCON = 0x00;
+  TCON = 0x00;
+  T2CON = 0x00;
+  RCAP2L = 0x00;
+  RCAP2H = 0x00;
+  TL2 = 0x00;
+  TH2 = 0x00;
+  P0 = 0xFF;
+  P1 = 0xFF;
+  P2 = 0xFF;
+  P3 = 0xFF;
+
+  __asm__(
+      // Clear register bank #3.
+      "mov psw, #(3 << 3)\n"
+      "mov r0, #0x00\n"
+      "mov r1, #0x00\n"
+      "mov r2, #0x00\n"
+      "mov r3, #0x00\n"
+      "mov r4, #0x00\n"
+      "mov r5, #0x00\n"
+      "mov r6, #0x00\n"
+      "mov r7, #0x00\n"
+
+      // Clear register bank #2.
+      "mov psw, #(2 << 3)\n"
+      "mov r0, #0x00\n"
+      "mov r1, #0x00\n"
+      "mov r2, #0x00\n"
+      "mov r3, #0x00\n"
+      "mov r4, #0x00\n"
+      "mov r5, #0x00\n"
+      "mov r6, #0x00\n"
+      "mov r7, #0x00\n"
+
+      // Clear register bank #1.
+      "mov psw, #(1 << 3)\n"
+      "mov r0, #0x00\n"
+      "mov r1, #0x00\n"
+      "mov r2, #0x00\n"
+      "mov r3, #0x00\n"
+      "mov r4, #0x00\n"
+      "mov r5, #0x00\n"
+      "mov r6, #0x00\n"
+      "mov r7, #0x00\n"
+
+      // Clear register bank #0 and leave it selected.
+      "mov psw, #(0 << 3)\n"
+      "mov r0, #0x00\n"
+      "mov r1, #0x00\n"
+      "mov r2, #0x00\n"
+      "mov r3, #0x00\n"
+      "mov r4, #0x00\n"
+      "mov r5, #0x00\n"
+      "mov r6, #0x00\n"
+      "mov r7, #0x00\n"
+
+      // Clear other registers.
+      "mov sp, #0x07\n"
+      "mov a, #0x00\n"
+      "mov b, #0x00\n"
+      "mov dph, #0x00\n"
+      "mov dpl, #0x00\n"
+
+      "ljmp 0xFFFD\n");
 }
 
 void magic_io_tx_byte(uint8_t c) {
