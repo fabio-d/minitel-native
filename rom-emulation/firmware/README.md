@@ -37,8 +37,11 @@ $ make
 where:
 * `PICO_BOARD` is the Pico board model that will run the ROM emulation software.
 * `MINITEL_MODEL` is the Minitel model that the ROM emulator will be used with:
-  * `nfz330`: RTIC Minitel 1 in conjunction with `board_nfz330_nfz400`.
-  * `nfz400`: Philips Minitel 2 in conjunction with `board_nfz330_nfz400`.
+  * `nfz330` (with `board_nfz330_nfz400`):
+    * RTIC Minitel 1 (NFZ 330)
+  * `nfz400` and `nfz400+ram` (with `board_nfz330_nfz400`) [^1]:
+    * Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
+    * HOBS Viewdata Banking Terminal (NMS 6302/00B)
   * There is also some limited support for custom hardware boards and/or other
     Minitels: it is possible to pass `justrom:` followed by a comma-separated
     list of names of bus lanes connected to GPIOs from 0 to 15. See the
@@ -54,6 +57,10 @@ where:
     [Client protocol](#client-protocol) below). If building for a wireless Pico
     (i.e. `PICO_BOARD` is `pico2_w`), the client protocol can also be exposed as
     a TCP server after joining a Wireless network.
+
+[^1]: These models are all software-compatible. The `nfz400` and `nfz400+ram`
+variants only differ in whether they emulate an extra external RAM chip that
+would normally only be present in the NMS 6302/00B.
 
 ## Installation
 

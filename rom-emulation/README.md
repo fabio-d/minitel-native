@@ -79,7 +79,8 @@ First of all, confirm that your Minitel model is supported and get the
 corresponding adapter board:
 * RTIC Minitel 1 (NFZ 330) is supported by
   [`board_nfz330_nfz400`](board_nfz330_nfz400/).
-* Philips Minitel 2 (NFZ 400) is supported by
+* Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W) and HOBS Viewdata
+  Banking Terminal (NMS 6302/00B) are supported by
   [`board_nfz330_nfz400`](board_nfz330_nfz400/).
 
 Alternatively, if you do not have the adapter board at hand, or if you want to

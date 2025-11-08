@@ -9,7 +9,8 @@
 This board supports the following Minitel models:
 
 * RTIC Minitel 1 (NFZ 330)
-* Philips Minitel 2 (NFZ 400)
+* Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
+* HOBS Viewdata Banking Terminal (NMS 6302/00B)
 
 ## Bill of materials
 
@@ -107,7 +108,7 @@ needed in Minitels that originally came with external ROMs is that their
 resistor was soldered in the factory in a slightly different position, which
 makes it act as a pull-down rather than a pull-up.
 
-### Philips Minitel 2 (NFZ 400)
+### Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
 
 > [!TIP]
 > The internals of this Minitel model have been extensively documented in the
@@ -128,6 +129,12 @@ fully inside the socket.
 It is probably a good idea to temporarily extract the Minitel's logic board and
 perform the operation on a flat rigid surface, to avoid flexing it while
 pushing.
+
+### HOBS Viewdata Banking Terminal (NMS 6302/00B)
+
+Remove the whole expansion board that is present in the socket in which the
+NFZ 400 would have just a ROM chip. Then, follow the same instructions as the
+NFZ 400.
 
 ## Schematic
 

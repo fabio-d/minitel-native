@@ -26,7 +26,8 @@ This project targets Minitel models based on 8052-compatible CPUs and the
 EF9345/TS9347 video chips. The following models are currently supported:
 
 * RTIC Minitel 1 (NFZ 330)
-* Philips Minitel 2 (NFZ 400)
+* Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
+* HOBS Viewdata Banking Terminal (NMS 6302/00B)
 
 ## License
 
