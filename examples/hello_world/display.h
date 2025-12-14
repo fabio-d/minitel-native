@@ -11,5 +11,6 @@ void clear_full(void);
 void draw_string(uint8_t x, uint8_t y, const char *text, uint8_t attributes);
 void draw_rectangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 void draw_color_pattern(uint8_t x0, uint8_t y0);
+void draw_copy_until_end_of_line(uint8_t x0, uint8_t y_src, uint8_t y_dst);
 
 #endif

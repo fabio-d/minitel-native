@@ -1,0 +1,6 @@
+#ifndef LIB_BOARD_722039M_INCLUDE_BOARD_CONTROLS_H
+#define LIB_BOARD_722039M_INCLUDE_BOARD_CONTROLS_H
+
+void board_controls_set_defaults(void);
+
+#endif

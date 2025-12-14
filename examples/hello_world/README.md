@@ -28,7 +28,12 @@ yellow (`x3`), their intersection shows the result of rendering yellow-on-red
 The correspondence between grayscale levels and colors is fixed: all grayscale 
 Minitels and all color Minitels use the palettes shown above.
 
-## Keyboard matrix
+## Keyboard
+
+In most Minitel models, the keyboard state will be displayed as a matrix of `0`
+or `1` values. The 722039 M, instead, displays it as a stream of bytes.
+
+### Keyboard Matrix
 
 <p align="center">
 <img src="pictures/keyb_matrix.png" width="40%" />
@@ -41,6 +46,20 @@ wires between the keyboard and the logic board, the keys are organized as a
 This program shows the raw logic value of each cell in the keyboard matrix and,
 when a key is pressed, its name at the bottom (a string starting with `KEY_`,
 the same identifier used by the `minitel_keyboard` library).
+
+### Keyboard Stream
+
+<p align="center">
+<img src="pictures/keyb_stream.png" width="40%" />
+</p>
+
+In the 722039 M, the keyboard is connected to an auxiliary microcontroller,
+connected to the main CPU via an internal serial port. In this model, the
+program shows the raw bytes as they arrive from the auxiliary microcontroller.
+
+The name of the last pressed key is shown at the bottom, along with an optional
+extra letter if a modifier key is pressed (`S` for Shift, `C` for Control, `F`
+for Function).
 
 ## Text sizes
 

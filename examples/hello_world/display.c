@@ -55,6 +55,10 @@ void clear_full(void) {
 }
 
 void draw_string(uint8_t x, uint8_t y, const char *text, uint8_t attributes) {
+  if (*text == '\0') {
+    return;  // empty string: nothing to do
+  }
+
   video_wait_busy();
   VIDEO->R1 = attributes;
   VIDEO->R7 = x;
@@ -124,4 +128,13 @@ void draw_color_pattern(uint8_t x0, uint8_t y0) {
   draw_string(x0 + 6, y0 + 10, "= foreground", 0x06);
   draw_string(x0 + 3, y0 + 11, "\x77\x7b", 0x86);
   draw_string(x0 + 6, y0 + 11, "= background", 0x06);
+}
+
+void draw_copy_until_end_of_line(uint8_t x0, uint8_t y_src, uint8_t y_dst) {
+  video_wait_busy();
+  VIDEO->R7 = x0;
+  VIDEO->R6 = y_src == 0 ? 0 : (7 + y_src);
+  VIDEO->R5 = x0;
+  VIDEO->R4 = y_dst == 0 ? 0 : (7 + y_dst);
+  VIDEO->ER0 = VIDEO_CMD_MVD | VIDEO_MOVE_DIR_MP_TO_AP | VIDEO_MOVE_STOP_EOB;
 }

@@ -1,4 +1,5 @@
 set(MINITEL_ALL_SUPPORTED_MODELS
+  722039m
   nfz330
   nfz400
 )

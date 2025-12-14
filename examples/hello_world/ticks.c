@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#include "timer/timer.h"
+#include <timer/timer.h>
 
 static volatile unsigned long ticks = 0;
 
