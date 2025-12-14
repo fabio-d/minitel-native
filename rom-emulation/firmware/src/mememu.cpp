@@ -133,8 +133,7 @@ void mememu_setup() {
   pc_latch_active = prog_latch + mememu_latch_offset_active;
 
   // Assign pin numbers.
-  sm_config_set_out_pins(&cfg_out, PIN_AD_BASE, 8);
-  sm_config_set_set_pins(&cfg_out, PIN_AD_BASE, 8);
+  sm_config_set_out_pin_base(&cfg_out, PIN_AD_BASE);
   sm_config_set_in_pin_base(&cfg_dira, PIN_PSEN);
   sm_config_set_in_pin_base(&cfg_dirb, PIN_PSEN);
   sm_config_set_sideset_pins(&cfg_dira, PIN_AD_BASE);
