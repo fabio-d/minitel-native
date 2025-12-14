@@ -16,6 +16,7 @@ from pathlib import Path
 class BusSpecialFunction(enum.Enum):
     NOPEN = enum.auto()
     BUSEN = enum.auto()
+    RST = enum.auto()
     ALE = enum.auto()
     PSEN = enum.auto()
     WR = enum.auto()
@@ -25,7 +26,7 @@ class BusSpecialFunction(enum.Enum):
 class BusLine:
     def __init__(self, gpioid: int, busid: int | BusSpecialFunction):
         if isinstance(busid, BusSpecialFunction):
-            assert 16 <= gpioid <= 22
+            assert (16 <= gpioid <= 22) or (26 <= gpioid <= 28)
         else:
             assert 0 <= gpioid <= 15
             assert 0 <= busid <= 15
@@ -78,6 +79,7 @@ parser.add_argument("input_busnames")
 parser.add_argument("output_path", type=Path)
 # optional features
 parser.add_argument("--with-bus-switch", action="store_true")
+parser.add_argument("--parking-mechanism", choices=("NOP", "RST"))
 parser.add_argument("--with-ram-controls", action="store_true")
 
 args = parser.parse_args()
@@ -89,8 +91,14 @@ busname_to_busid = {
     "PSEN": BusSpecialFunction.PSEN,
 }
 if args.with_bus_switch:
-    busname_to_busid["NOPEN"] = BusSpecialFunction.NOPEN
     busname_to_busid["BUSEN"] = BusSpecialFunction.BUSEN
+    match args.parking_mechanism:
+        case "NOP":
+            busname_to_busid["NOPEN"] = BusSpecialFunction.NOPEN
+        case "RST":
+            busname_to_busid["RST"] = BusSpecialFunction.RST
+        case _:
+            exit("Need parking mechanism to use before bus switch is turned on")
 if args.with_ram_controls:
     busname_to_busid["WR"] = BusSpecialFunction.WR
     busname_to_busid["RD"] = BusSpecialFunction.RD

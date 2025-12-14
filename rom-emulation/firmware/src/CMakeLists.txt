@@ -30,6 +30,8 @@ target_compile_definitions(rom-emulator PRIVATE
   "-DMINITEL_MODEL_FEATURE=\"Minitel model ${MINITEL_MODEL}\""
   "-DROM_EMULATOR_IS_INTERACTIVE=${ROM_EMULATOR_IS_INTERACTIVE}"
   "-DROM_EMULATOR_HAS_BUS_SWITCH=${ROM_EMULATOR_HAS_BUS_SWITCH}"
+  "-DROM_EMULATOR_HAS_NOPEN=${ROM_EMULATOR_HAS_NOPEN}"
+  "-DROM_EMULATOR_HAS_RST=${ROM_EMULATOR_HAS_RST}"
   "-DROM_EMULATOR_PROVIDES_RAM=${ROM_EMULATOR_PROVIDES_RAM}"
 )
 
@@ -59,6 +61,8 @@ add_custom_command(
     ${PINOUT}
     pin-map.h
     $<${ROM_EMULATOR_HAS_BUS_SWITCH}:--with-bus-switch>
+    $<${ROM_EMULATOR_HAS_NOPEN}:--parking-mechanism=NOP>
+    $<${ROM_EMULATOR_HAS_RST}:--parking-mechanism=RST>
     $<${ROM_EMULATOR_PROVIDES_RAM}:--with-ram-controls>
   DEPENDS ../scripts/generate-pin-map.py
 )

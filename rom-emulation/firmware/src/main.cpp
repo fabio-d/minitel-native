@@ -1,3 +1,4 @@
+#include <hardware/gpio.h>
 #include <hardware/structs/busctrl.h>
 #include <pico/binary_info.h>
 #include <pico/stdlib.h>
@@ -20,6 +21,7 @@
 #include "magic-io.h"
 #include "mememu.h"
 #include "partition.h"
+#include "pin-map.h"
 #include "trace.h"
 
 bi_decl(bi_program_feature(MINITEL_MODEL_FEATURE));
@@ -32,6 +34,10 @@ bi_decl(bi_program_feature("Interactive operating mode"));
 static_assert(sizeof(EMBEDDED_ROM) <= MAGIC_RANGE_BASE);
 #else
 #error Missing or invalid ROM_EMULATOR_IS_INTERACTIVE macro
+#endif
+
+#if ROM_EMULATOR_HAS_RST == 1
+bi_decl(bi_1pin_with_name(PIN_RST, "RST"));
 #endif
 
 static bool in_menu = false;
@@ -393,6 +399,13 @@ static void load_rom_from_data_partition() {
 }
 
 int main() {
+#if ROM_EMULATOR_HAS_RST == 1
+  // Initially keep the CPU in reset.
+  gpio_init(PIN_RST);
+  gpio_put(PIN_RST, 1);
+  gpio_set_dir(PIN_RST, GPIO_OUT);
+#endif
+
   // Give core 1 (that will write into the emulated RAM) and DMA reads (that
   // will serve the emulated ROM and RAM) priority access, so that they are
   // never stalled.
@@ -427,6 +440,12 @@ int main() {
 #endif
 
   mememu_start();
+#if ROM_EMULATOR_HAS_RST == 1
+  // Start the CPU.
+  sleep_us(500);
+  gpio_put(PIN_RST, 0);
+#endif
+
   stdio_init_all();
 
 #if ROM_EMULATOR_WITH_WIRELESS == 1

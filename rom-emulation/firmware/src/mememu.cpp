@@ -37,8 +37,10 @@ bi_decl(bi_1pin_with_name(PIN_PSEN, "~PSEN"));
 
 #if ROM_EMULATOR_HAS_BUS_SWITCH == 1
 bi_decl(bi_program_feature("Bus Switch control"));
-bi_decl(bi_1pin_with_name(PIN_NOPEN, "~NOPEN"));
 bi_decl(bi_1pin_with_name(PIN_BUSEN, "~BUSEN"));
+#if ROM_EMULATOR_HAS_NOPEN == 1
+bi_decl(bi_1pin_with_name(PIN_NOPEN, "~NOPEN"));
+#endif
 #endif
 
 #if ROM_EMULATOR_PROVIDES_RAM == 1
@@ -184,6 +186,7 @@ void mememu_setup() {
                         dma_encode_transfer_count(1), false);
 
 #if ROM_EMULATOR_HAS_BUS_SWITCH == 1
+#if ROM_EMULATOR_HAS_NOPEN == 1
   // Take control of the NOPEN output pin (which is externally pulled-down).
   // Let's start with maintaining 0 as an output, so that the SN74HCT541 doesn't
   // stop generating NOP (i.e. 0x00) yet. We have to be careful to never emit
@@ -193,8 +196,9 @@ void mememu_setup() {
   gpio_init(PIN_NOPEN);
   gpio_put(PIN_NOPEN, 0);
   gpio_set_dir(PIN_NOPEN, GPIO_OUT);
+#endif
 
-  // Tell the two SN74CB3T3384 chips to stop isolating us from the bus.
+  // Tell the SN74CB3T3384/SN74CB3T16211 to stop isolating us from the bus.
   gpio_init(PIN_BUSEN);
   gpio_put(PIN_BUSEN, 0);
   gpio_set_dir(PIN_BUSEN, GPIO_OUT);
@@ -238,7 +242,7 @@ void mememu_setup() {
   // emulated RAM.
   multicore_launch_core1(core1_worker_task);
 
-#if ROM_EMULATOR_HAS_BUS_SWITCH == 1
+#if ROM_EMULATOR_HAS_BUS_SWITCH == 1 && ROM_EMULATOR_HAS_NOPEN == 1
   // With the state machines now running, we are now emitting NOPs (0x00) too.
   // We can tell the SN74HCT541 to stop emitting its own NOPs.
   sleep_us(100);

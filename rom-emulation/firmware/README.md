@@ -42,6 +42,8 @@ where:
   * `nfz400` and `nfz400+ram` (with `board_nfz330_nfz400`) [^1]:
     * Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
     * HOBS Viewdata Banking Terminal (NMS 6302/00B)
+  * `722039m` (with `board_722039m`) [^2]:
+    * Telic-Alcatel Minitel 12 (722039 M)
   * There is also some limited support for custom hardware boards and/or other
     Minitels: it is possible to pass `justrom:` followed by a comma-separated
     list of names of bus lanes connected to GPIOs from 0 to 15. See the
@@ -61,6 +63,8 @@ where:
 [^1]: These models are all software-compatible. The `nfz400` and `nfz400+ram`
 variants only differ in whether they emulate an extra external RAM chip that
 would normally only be present in the NMS 6302/00B.
+
+[^2]: Interactive mode is not implemented yet.
 
 ## Installation
 
