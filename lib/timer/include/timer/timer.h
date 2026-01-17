@@ -44,4 +44,12 @@ extern char TIMER___STATIC_ASSERT_BOUNDS_FAILED;  // never defined anywhere
 #define TIMER_TICKS_TO_RELOAD_VALUE_16(ticks) \
   ((uint16_t)(-TIMER___STATIC_ASSERT_BOUNDS((ticks), 1LL, 0x10000LL)))
 
+// Perform a 16-bit addition to TH0:TL0 or TH1:TL1 while temporarily pausing the
+// respective timer for TIMER_ADJUST_THTL_CYCLES cycles.
+//
+// This function must be called with interrupts disabled.
+void timer_adjust_thtl0(uint16_t ticks) __naked;
+void timer_adjust_thtl1(uint16_t ticks) __naked;
+#define TIMER_ADJUST_THTL_CYCLES 7
+
 #endif

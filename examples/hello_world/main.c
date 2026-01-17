@@ -12,23 +12,26 @@
 // Some boards require the board-specific "board_periodic_task()" function to be
 // called at a fixed rate.
 #ifdef BOARD_PERIODIC_TASK_HZ
-void board_periodic_task_interrupt(void) __interrupt(5 /* TF2_VECTOR */) {
-  TF2 = 0;
+static inline void board_periodic_task_reload() {
+  const uint16_t reload_value = TIMER_TICKS_TO_RELOAD_VALUE_16(
+      TIMER_TICKS_FROM_HZ(BOARD_PERIODIC_TASK_HZ));
+  timer_adjust_thtl1(reload_value + TIMER_ADJUST_THTL_CYCLES);
+}
+
+void board_periodic_task_interrupt(void) __interrupt(TF1_VECTOR) {
+  board_periodic_task_reload();
   board_periodic_task();
 }
 
 static void board_periodic_task_setup(void) {
-  const uint16_t rcap2 = TIMER_TICKS_TO_RELOAD_VALUE_16(
-      TIMER_TICKS_FROM_HZ(BOARD_PERIODIC_TASK_HZ));
+  board_periodic_task_reload();
 
-  // Set up Timer 2 in auto-reload mode.
-  T2CON = 0x00;
-  RCAP2H = rcap2 >> 8;
-  RCAP2L = rcap2 & 0xFF;
-  TR2 = 1;
+  // Set Timer1 in mode 1 and start it.
+  TMOD = (TMOD & T0_MASK) | T1_M0;
+  TR1 = 1;
 
-  // Enable interrupts.
-  ET2 = 1;
+  // Enable Timer1 interrupt.
+  ET1 = 1;
 }
 #endif
 
@@ -65,7 +68,8 @@ void main(void) {
   draw_string(16, 24, "DDoouubbllee  WW  &&  HH", 0x37);
 
   // Enable interrupts globally. This starts delivering the Timer 0 interrupt
-  // that was previously configured by ticks_setup().
+  // that was previously configured by ticks_setup() as well as Timer 1 for the
+  // board periodic task.
   EA = 1;
 
   while (true) {
