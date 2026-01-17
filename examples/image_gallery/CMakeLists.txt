@@ -17,6 +17,7 @@ target_include_directories(image_gallery PRIVATE
 target_link_libraries(image_gallery PRIVATE
   minitel_board
   minitel_keyboard
+  minitel_timer
   minitel_video
 )
 

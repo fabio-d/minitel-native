@@ -35,6 +35,11 @@ void magic_io_jump_to_trampoline(void) {
   IE = 0x00;
   SCON = 0x00;
   TCON = 0x00;
+  TMOD = 0x00;
+  TL0 = 0x00;
+  TL1 = 0x00;
+  TH0 = 0x00;
+  TH1 = 0x00;
   T2CON = 0x00;
   RCAP2L = 0x00;
   RCAP2H = 0x00;

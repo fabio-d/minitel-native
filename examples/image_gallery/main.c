@@ -3,6 +3,7 @@
 #include <keyboard/keyboard.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <timer/timer.h>
 #include <video/commands.h>
 #include <video/mcu_interface.h>
 #include <video/registers.h>
@@ -36,6 +37,32 @@
 #include "image7.h"
 #include "image8.h"
 #include "image9.h"
+
+// Some boards require the board-specific "board_periodic_task()" function to be
+// called at a fixed rate.
+#ifdef BOARD_PERIODIC_TASK_HZ
+static inline void board_periodic_task_reload() {
+  const uint16_t reload_value = TIMER_TICKS_TO_RELOAD_VALUE_16(
+      TIMER_TICKS_FROM_HZ(BOARD_PERIODIC_TASK_HZ));
+  timer_adjust_thtl1(reload_value + TIMER_ADJUST_THTL_CYCLES);
+}
+
+void board_periodic_task_interrupt(void) __interrupt(TF1_VECTOR) {
+  board_periodic_task_reload();
+  board_periodic_task();
+}
+
+static void board_periodic_task_setup(void) {
+  board_periodic_task_reload();
+
+  // Set Timer1 in mode 1 and start it.
+  TMOD = (TMOD & T0_MASK) | T1_M0;
+  TR1 = 1;
+
+  // Enable Timer1 interrupt.
+  ET1 = 1;
+}
+#endif
 
 #define PRESSED_KEY_1 (1 << 0)
 #define PRESSED_KEY_2 (1 << 1)
@@ -288,6 +315,10 @@ static void display_image(uint8_t image_num) {
 void main(void) {
   display_setup();
   board_controls_set_defaults();
+#ifdef BOARD_PERIODIC_TASK_HZ
+  board_periodic_task_setup();
+#endif
+  EA = 1;
 
   // Initially display the first image.
   uint8_t image_num = 1;

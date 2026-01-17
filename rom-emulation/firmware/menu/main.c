@@ -16,17 +16,17 @@
 #define ATTR_BLACK_ON_WHITE 0x47
 
 // Initializes the timer 0 to overflow every 100 uS.
-void timer_setup(void) {
+void timer0_setup(void) {
   const uint8_t reload =
       TIMER_TICKS_TO_RELOAD_VALUE_8(TIMER_TICKS_FROM_US(100));
-  TMOD = 0x02;
+  TMOD = (TMOD & T1_MASK) | T0_M1;
   TH0 = reload;
   TL0 = reload;
   TR0 = 1;
 }
 
 // Waits the given number of timer 0 overflow events, e.g. 10000 = 1 second.
-void timer_delay(uint16_t ticks) {
+void timer0_delay(uint16_t ticks) {
   while (ticks-- != 0) {
     // Wait overflow.
     TF0 = 0;
@@ -34,6 +34,32 @@ void timer_delay(uint16_t ticks) {
     }
   }
 }
+
+// Some boards require the board-specific "board_periodic_task()" function to be
+// called at a fixed rate.
+#ifdef BOARD_PERIODIC_TASK_HZ
+static inline void board_periodic_task_reload() {
+  const uint16_t reload_value = TIMER_TICKS_TO_RELOAD_VALUE_16(
+      TIMER_TICKS_FROM_HZ(BOARD_PERIODIC_TASK_HZ));
+  timer_adjust_thtl1(reload_value + TIMER_ADJUST_THTL_CYCLES);
+}
+
+void board_periodic_task_interrupt(void) __interrupt(TF1_VECTOR) {
+  board_periodic_task_reload();
+  board_periodic_task();
+}
+
+static void board_periodic_task_setup(void) {
+  board_periodic_task_reload();
+
+  // Set Timer1 in mode 1 and start it.
+  TMOD = (TMOD & T0_MASK) | T1_M0;
+  TR1 = 1;
+
+  // Enable Timer1 interrupt.
+  ET1 = 1;
+}
+#endif
 
 // Initializes the serial port ("peri-informatique") at 2400 baud 8N1.
 void serial_setup(void) {
@@ -245,6 +271,10 @@ static void run_boot_trampoline(void) {
   video_set_cursor(0, 2);
   printf("Booting...");
 
+  // Disable interrupts and sleep half a second.
+  EA = 0;
+  timer0_delay(5000);
+
   magic_io_jump_to_trampoline();
 }
 
@@ -307,16 +337,20 @@ static void run_client_mode(void) {
 }
 
 void main(void) {
-  timer_setup();
+  timer0_setup();
   serial_setup();
   video_setup();
   board_controls_set_defaults();
+#ifdef BOARD_PERIODIC_TASK_HZ
+  board_periodic_task_setup();
+#endif
+  EA = 1;
 
   // Wait 2 seconds before displaying any non-black pixel, to give the CRT some
   // time to settle.
   video_set_attributes(ATTR_WHITE_ON_BLACK);
   video_clear(0, 39, 0, 24);
-  timer_delay(20000);
+  timer0_delay(20000);
 
   video_set_cursor(0, 0);
   printf("Minitel ROM Emulator");
