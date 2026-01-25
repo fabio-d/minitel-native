@@ -14,7 +14,7 @@
 #define BOARD_PERIODIC_TASK_HZ 1200
 void board_periodic_task(void);
 
-bool board_read_keyboard_raw_stream(uint8_t* dest);
+bool board_read_keyboard_raw_stream(__data uint8_t* dest);
 uint8_t board_read_keyboard_key(void);
 uint8_t board_read_keyboard_modifier(void);
 

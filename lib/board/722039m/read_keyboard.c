@@ -16,9 +16,11 @@
 static int16_t phase = -2 * BOARD_PERIODIC_TASK_HZ;  // 2 s initial delay
 
 static uint8_t txbuf = START_VALUE;
-static uint16_t rxbuf;
+static __bit txbuf_parity;
+static uint8_t rxbuf;
+static __bit rxbuf_start, rxbuf_parity;
 
-static bool rawval_is_present = false;
+static __bit rawval_is_present = false;
 static uint16_t rawval;
 
 static enum decode_state_t {
@@ -26,111 +28,109 @@ static enum decode_state_t {
   DECODE_STATE_LINE_STATUS,
 } decode_state;
 
-static bool report_key_consumed = true;
+static __bit report_key_consumed = true;
 static uint8_t report_key, report_modifier;
 
+#pragma save
+#pragma nooverlay
 void board_periodic_task(void) {
   switch (phase++) {
-    case 0:
-      TVP = 0;  // start bit
+    case 0:  // TX: start bit
+      TVP = 0;
+      txbuf_parity = 1;
       break;
-    case 2:
-      TVP = !!(txbuf & (1 << 0));  // least significant bit
-      break;
+    case 2:  // TX: least significant bit
     case 4:
-      TVP = !!(txbuf & (1 << 1));
-      break;
     case 6:
-      TVP = !!(txbuf & (1 << 2));
-      break;
     case 8:
-      TVP = !!(txbuf & (1 << 3));
-      break;
     case 10:
-      TVP = !!(txbuf & (1 << 4));
-      break;
     case 12:
-      TVP = !!(txbuf & (1 << 5));
-      break;
     case 14:
-      TVP = !!(txbuf & (1 << 6));
+    case 16:  // TX: most significant bit
+      if (txbuf & 1) {
+        TVP = 1;
+        txbuf_parity ^= 1;
+      } else {
+        TVP = 0;
+      }
+      txbuf >>= 1;
       break;
-    case 16:
-      TVP = !!(txbuf & (1 << 7));  // most significant bit
+    case 18:  // TX: parity bit
+      TVP = txbuf_parity;
       break;
-    case 18:
-      TVP = PARITY(txbuf);  // parity bit
+    case 20:  // TX: stop bit
+      TVP = 1;
       break;
-    case 20:
-      TVP = 1;  // stop bit
+    case 1:  // RX: start bit
+      rxbuf_start = TPV;
+      rxbuf_parity = 1;
       break;
-    case 1:  // start bit
-      rxbuf = (TPV ? 0x100 : 0);
-      break;
-    case 3:
+    case 3:  // RX: least significant bit
     case 5:
     case 7:
     case 9:
     case 11:
     case 13:
     case 15:
-    case 17:
-      rxbuf = (rxbuf >> 1) | (TPV ? 0x100 : 0);
-      break;
-    case 19:
-      if ((rxbuf & 1) == 0) {  // was the start bit 0?
+    case 17:  // RX: most significant bit
+      if (TPV) {
+        rxbuf = (rxbuf >> 1) | 0x80;
+        rxbuf_parity ^= 1;
+      } else {
         rxbuf >>= 1;
-        if (PARITY(rxbuf) == TPV) {  // is the parity bit correct?
-          __bit is_idle = false;
-          __bit is_key = false;
-          __bit is_key_repeat = false;
-          __bit is_modifier = false;
-          __bit is_line_status = false;
+      }
+      break;
+    case 19:  // RX: parity
+      if (rxbuf_start == 0 && TPV == rxbuf_parity) {
+        __bit is_idle = false;
+        __bit is_key = false;
+        __bit is_key_repeat = false;
+        __bit is_modifier = false;
+        __bit is_line_status = false;
 
-          switch (decode_state) {
-            case DECODE_STATE_IDLE:
-              switch (rxbuf) {
-                case IDLE_VALUE:
-                  is_idle = true;
-                  break;
-                case 0xE9:
-                  is_key_repeat = true;
-                  break;
-                case 0xEA:
-                  decode_state = DECODE_STATE_LINE_STATUS;
-                  break;
-                case 0xE0:
-                case 0xE3:
-                case 0xE5:
-                case 0xF8:
-                  is_modifier = true;
-                  break;
-                default:
-                  is_key = true;
-                  break;
-              }
-              break;
-            case DECODE_STATE_LINE_STATUS:
-              is_line_status = true;
-              decode_state = DECODE_STATE_IDLE;
-              break;
-          }
+        switch (decode_state) {
+          case DECODE_STATE_IDLE:
+            switch (rxbuf) {
+              case IDLE_VALUE:
+                is_idle = true;
+                break;
+              case 0xE9:
+                is_key_repeat = true;
+                break;
+              case 0xEA:
+                decode_state = DECODE_STATE_LINE_STATUS;
+                break;
+              case 0xE0:
+              case 0xE3:
+              case 0xE5:
+              case 0xF8:
+                is_modifier = true;
+                break;
+              default:
+                is_key = true;
+                break;
+            }
+            break;
+          case DECODE_STATE_LINE_STATUS:
+            is_line_status = true;
+            decode_state = DECODE_STATE_IDLE;
+            break;
+        }
 
-          if (!is_idle) {
-            __critical {
-              rawval_is_present = true;
-              rawval = rxbuf;
+        if (!is_idle) {
+          __critical {
+            rawval_is_present = true;
+            rawval = rxbuf;
 
-              if (is_key) {
-                report_key = rxbuf;
-                report_key_consumed = false;
-              }
-              if (is_key_repeat) {
-                report_key_consumed = false;
-              }
-              if (is_modifier) {
-                report_modifier = rxbuf;
-              }
+            if (is_key) {
+              report_key = rxbuf;
+              report_key_consumed = false;
+            }
+            if (is_key_repeat) {
+              report_key_consumed = false;
+            }
+            if (is_modifier) {
+              report_modifier = rxbuf;
             }
           }
         }
@@ -143,8 +143,9 @@ void board_periodic_task(void) {
       break;
   }
 }
+#pragma restore
 
-bool board_read_keyboard_raw_stream(uint8_t* dest) {
+bool board_read_keyboard_raw_stream(__data uint8_t* dest) {
   bool result;
 
   __critical {
