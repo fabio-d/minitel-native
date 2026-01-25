@@ -47,6 +47,6 @@
 
 // Given a key code, return its name (a string starting with "KEY_"), or NULL if
 // the code is not valid.
-const char* board_key_to_name(uint8_t key);
+const char* keyboard_key_to_name(uint8_t key);
 
 #endif

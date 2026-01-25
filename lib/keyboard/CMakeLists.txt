@@ -1,5 +1,5 @@
 add_library(minitel_keyboard
-  board_key_to_name.c
+  key_to_name.c
 )
 
 target_include_directories(minitel_keyboard PUBLIC

@@ -40,7 +40,7 @@ void keyb_widget_fill(uint8_t x0, uint8_t y0) {
           pressed_key = "(multiple keys)";
         } else {
           uint8_t key = KEYBOARD_MAKE_KEY_CODE(r, c);
-          pressed_key = board_key_to_name(key);
+          pressed_key = keyboard_key_to_name(key);
           if (pressed_key == NULL) {
             pressed_key = "(unknown key)";
           }
@@ -106,7 +106,7 @@ void keyb_widget_fill(uint8_t x0, uint8_t y0) {
   draw_string(x0 + 17, y0 + 11, pressed_modifier, 0x03);
 
   uint8_t keycode = board_read_keyboard_key();
-  const char *pressed_key = board_key_to_name(keycode);
+  const char *pressed_key = keyboard_key_to_name(keycode);
   if (pressed_key != NULL) {
     draw_string(x0 + 1, y0 + 11, pressed_key, 0x07);
     for (uint8_t x = x0 + 1 + strlen(pressed_key); x < x0 + 17; x++)
