@@ -8,7 +8,7 @@ minitel_lib_init()
 if(MINITEL_MODEL STREQUAL "nfz330")
   set(BAUDRATE 57600)
 elseif(MINITEL_MODEL STREQUAL "nfz400")
-  set(BAUDRATE 111860)  # fine-tuned to match the USB-UART's 115200 rate
+  set(BAUDRATE 115200)
 else()
   message(FATAL_ERROR "Unsupported MINITEL_MODEL")
 endif()
