@@ -17,18 +17,23 @@ The companion [send-video-frames.py](scripts/send-video-frames.py) script:
 2. dithers and turns its frames into mosaic characters
 3. lastly, streams them to the Minitel in a loop.
 
-The baud rate (and, as a consequence, the number of frames per second) is
-different depending on the Minitel model. The [CMakeLists.txt](CMakeLists.txt)
-contains the highest rates that were experimentally found to be working in the
-different supported models.
+## Maximum baud rate
+
+The following table shows the fastest baud rates that were attained in each
+tested Minitel model. Try lower speeds if experiencing data corruption.
+
+| Model                    | Baud rate |
+|--------------------------|-----------|
+| RTIC Minitel 1           | 57600     |
+| Philips Minitel 2        | 115200    |
+| Telic-Alcatel Minitel 12 | 19200     |
 
 ## Quick start
 
 Connect the Minitel's serial port to the computer and launch the ROM. Then, run
 the following command on the computer:
 ```shell
-# Replace 115200 with the baud rate corresponding to your Minitel model (see
-# CMakeLists.txt).
+# Replace 115200 with the actual baud rate.
 $ python3 scripts/send-video-frames.py \
     --serial-port /dev/ttyUSB0 \
     --baud-rate 115200 \

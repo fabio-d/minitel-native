@@ -4,25 +4,13 @@ include(../../lib/cmake/init.cmake)
 project(video_stream C)
 minitel_lib_init()
 
-# These are the high baud rates that were found to be working for each model.
-if(MINITEL_MODEL STREQUAL "nfz330")
-  set(BAUDRATE 57600)
-elseif(MINITEL_MODEL STREQUAL "nfz400")
-  set(BAUDRATE 115200)
-else()
-  message(FATAL_ERROR "Unsupported MINITEL_MODEL")
-endif()
-
 add_executable(video_stream
   main.c
 )
 
-target_compile_definitions(video_stream PRIVATE
-  "-DBAUDRATE=${BAUDRATE}"
-)
-
 target_link_libraries(video_stream PRIVATE
   minitel_board
+  minitel_keyboard
   minitel_timer
   minitel_video
 )
