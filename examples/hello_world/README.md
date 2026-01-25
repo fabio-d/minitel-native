@@ -1,7 +1,8 @@
 # Hello World
 
 <p align="center">
-<img src="pictures/hello_world.jpg" width="50%" />
+<img src="pictures/hello_world.jpg" width="52%" />
+<img src="pictures/hello_world_722039m.jpg" width="22%" />
 </p>
 
 This program shows on screen the keyboard state and the time since boot, as well
