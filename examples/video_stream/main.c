@@ -3,13 +3,14 @@
 #include <keyboard/keyboard.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <timer/timer.h>
 #include <video/commands.h>
 #include <video/mcu_interface.h>
 #include <video/registers.h>
 
 // Serial input FIFO.
-static __idata uint8_t fifo[64];
+static __idata uint8_t fifo[40];
 static uint8_t fifo_rpos = 0;
 static uint8_t fifo_wpos = 0;
 
@@ -264,21 +265,27 @@ int putchar(int c) {
   return c;
 }
 
-#define NUM_SPEEDS 8
-static const unsigned long speed_baud_rates[NUM_SPEEDS] = {
-    1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200,
+static void clear_until_end_of_line(void) {
+  uint8_t old_x;
+  do {
+    old_x = VIDEO->R7;
+    putchar(' ');
+  } while (old_x != 39);
+}
+
+static const unsigned long speed_baud_rates[] = {
+#define BAUD_RATE(baud) baud
+#include "baud_rates.h"
+#undef BAUD_RATE
 };
-static const uint16_t speed_reload_values[NUM_SPEEDS] = {
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(1200)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(2400)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(4800)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(9600)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(19200)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(38400)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(57600)),
-    TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(115200)),
+static const uint16_t speed_reload_values[] = {
+#define BAUD_RATE(baud) \
+  TIMER_TICKS_TO_RELOAD_VALUE_16(TIMER_TICKS_FROM_BAUD_T2(baud))
+#include "baud_rates.h"
+#undef BAUD_RATE
 };
-static uint8_t speed_idx = 3;  // initial choice: 9600
+#define NUM_SPEEDS (sizeof(speed_baud_rates) / sizeof(speed_baud_rates[0]))
+static uint8_t speed_idx = 8;  // initial choice: 9600
 
 uint16_t speed_selection_menu(void) {
   // Clear buffer #0.
@@ -321,6 +328,9 @@ uint16_t speed_selection_menu(void) {
   printf(" SPACE ");
   VIDEO->R1 = 0x07;  // white-on-black
   printf("           Toggle buffering");
+  VIDEO->R6 = 0;  // y
+  VIDEO->R7 = 0;  // x
+  printf("Baud rate:");
 
   // Display loop.
   __bit selection_changed = true;
@@ -328,14 +338,37 @@ uint16_t speed_selection_menu(void) {
     if (selection_changed) {
       selection_changed = false;
 
-      // Move cursor and show currently selected speed (with some extra blanks
-      // to cover the previous value, in case it was shorter).
-      VIDEO->R6 = 0;  // y
-      VIDEO->R7 = 0;  // x
-      printf("Baud rate: %lu  ", speed_baud_rates[speed_idx]);
+      // Print the currently selected nominal baud rate.
       VIDEO->R6 = 8;  // y
       VIDEO->R7 = 0;  // x
-      printf("Buffering: %s ", buf_enable ? "ON" : "OFF");
+      unsigned long nominal_baud_rate = speed_baud_rates[speed_idx];
+      printf(" Nominal   %lu", speed_baud_rates[speed_idx]);
+      clear_until_end_of_line();
+
+      // Print the actual baud rate given the 8051's XTAL frequency.
+      VIDEO->R6 = 9;  // y
+      VIDEO->R7 = 0;  // x
+      unsigned long ticks_interval =
+          0x10000ull - speed_reload_values[speed_idx];
+      float actual_baud_rate = XTAL_HZ / ((float)32 * ticks_interval);
+      printf(" Actual    %lu/(32*%lu) = %lu", (unsigned long)XTAL_HZ,
+             ticks_interval, (unsigned long)(0.5 + actual_baud_rate));
+      clear_until_end_of_line();
+
+      // Print the error in percentage (internally computed as a fixed-point
+      // number with 2 fractional digits).
+      VIDEO->R6 = 10;  // y
+      VIDEO->R7 = 0;   // x
+      long error = 0.5 + 10000 * (actual_baud_rate - nominal_baud_rate) /
+                             nominal_baud_rate;
+      printf(" Error     %ld.%02ld %%", error / 100, labs(error % 100));
+      clear_until_end_of_line();
+
+      // Show whether buffering has been enabled or not.
+      VIDEO->R6 = 13;  // y
+      VIDEO->R7 = 0;   // x
+      printf("Buffering: %s", buf_enable ? "ON" : "OFF");
+      clear_until_end_of_line();
 
       // Wait for no key to be pressed before accepting the next input.
       wait_no_key_pressed();
@@ -375,6 +408,9 @@ void main(void) {
   board_periodic_task_setup();
 #endif
   EA = 1;
+
+  // Give priority to the serial interrupt, to (try to) not lose data.
+  PS = 1;
 
   // Enable VSYNC bit.
   VIDEO->ER0 = VIDEO_CMD_VRM;
@@ -436,7 +472,7 @@ void main(void) {
       } else if (keyboard_test_scheduled) {
         keyboard_test_scheduled = false;
 
-        if (get_pressed_keys() & PRESSED_KEY_CONNECT) {
+        if (keyboard_key_is_pressed(KEY_CONNECT)) {
           break;
         }
       }

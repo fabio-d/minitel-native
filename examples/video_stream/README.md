@@ -1,6 +1,7 @@
 # Video Stream
 
 <p align="center">
+<img src="pictures/menu.jpg" width="30%" />
 <img src="pictures/video.webp" width="30%" />
 </p>
 
@@ -17,25 +18,27 @@ The companion [send-video-frames.py](scripts/send-video-frames.py) script:
 2. dithers and turns its frames into mosaic characters
 3. lastly, streams them to the Minitel in a loop.
 
-## Maximum baud rate
+## Baud rate selection
 
-The following table shows the fastest baud rates that were attained in each
-tested Minitel model. Try lower speeds if experiencing data corruption.
+The following table shows the fastest transfer rates that were attained in each
+tested Minitel model. Try lower baud rates and/or more stop bits if experiencing
+data corruption.
 
-| Model                    | Baud rate |
-|--------------------------|-----------|
-| RTIC Minitel 1           | 57600     |
-| Philips Minitel 2        | 115200    |
-| Telic-Alcatel Minitel 12 | 19200     |
+| Model                    | FPS  | Command line arguments             |
+|--------------------------|-----:|------------------------------------|
+| RTIC Minitel 1           |  9.5 | `--baud-rate 115200 --stop-bits 3` |
+| Philips Minitel 2        | 11.3 | `--baud-rate 115200 --stop-bits 1` |
+| Telic-Alcatel Minitel 12 |  7.6 | `--baud-rate 76800 --stop-bits 1`  |
 
 ## Quick start
 
 Connect the Minitel's serial port to the computer and launch the ROM. Then, run
 the following command on the computer:
 ```shell
-# Replace 115200 with the actual baud rate.
+# Replace "--baud-rate 115200" and "--stop-bits 1" with the actual values.
 $ python3 scripts/send-video-frames.py \
     --serial-port /dev/ttyUSB0 \
     --baud-rate 115200 \
+    --stop-bits 1 \
     steamboat.gif
 ```

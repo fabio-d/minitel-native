@@ -1,0 +1,24 @@
+// This is a list of (reasonable) baud rates, taken from the CP2102 datasheet.
+// Modify as needed to try different speeds.
+
+// clang-format off
+BAUD_RATE(300),
+BAUD_RATE(600),
+BAUD_RATE(1200),
+BAUD_RATE(1800),
+BAUD_RATE(2400),
+BAUD_RATE(4000),
+BAUD_RATE(4800),
+BAUD_RATE(7200),
+BAUD_RATE(9600),
+BAUD_RATE(14400),
+BAUD_RATE(16000),
+BAUD_RATE(19200),
+BAUD_RATE(28800),
+BAUD_RATE(38400),
+BAUD_RATE(51200),
+BAUD_RATE(56000),
+BAUD_RATE(57600),
+BAUD_RATE(64000),
+BAUD_RATE(76800),
+BAUD_RATE(115200),
