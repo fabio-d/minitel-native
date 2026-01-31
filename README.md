@@ -9,6 +9,9 @@ Software and hardware tools to run native programs on the
 <br />
 <img src="rom-emulation/board_nfz330_nfz400/pictures/nfz330_installed.jpg" width="40%" />
 <img src="rom-emulation/board_nfz330_nfz400/pictures/nfz400_installed.jpg" width="40%" />
+<br />
+<img src="examples/hello_world/pictures/hello_world_722039m.jpg" width="22%" />
+<img src="rom-emulation/board_722039m/pictures/installed.jpg" width="41%" />
 </p>
 
 ## Usage instructions
@@ -28,6 +31,7 @@ EF9345/TS9347 video chips. The following models are currently supported:
 * RTIC Minitel 1 (NFZ 330)
 * Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
 * HOBS Viewdata Banking Terminal (NMS 6302/00B)
+* Telic-Alcatel Minitel 12 (722039 M)
 
 ## License
 

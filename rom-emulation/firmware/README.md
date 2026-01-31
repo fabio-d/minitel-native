@@ -64,8 +64,6 @@ where:
 variants only differ in whether they emulate an extra external RAM chip that
 would normally only be present in the NMS 6302/00B.
 
-[^2]: Interactive mode is not implemented yet.
-
 ## Installation
 
 ### If `OPERATING_MODE` is `embedded`

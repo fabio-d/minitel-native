@@ -82,6 +82,8 @@ corresponding adapter board:
 * Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W) and HOBS Viewdata
   Banking Terminal (NMS 6302/00B) are supported by
   [`board_nfz330_nfz400`](board_nfz330_nfz400/).
+* Telic-Alcatel Minitel 12 (722039 M) is supported by
+  [`board_722039m`](board_722039m/).
 
 Alternatively, if you do not have the adapter board at hand, or if you want to
 port the project to a new Minitel model (pull requests are welcome!), you might
