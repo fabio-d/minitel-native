@@ -1,4 +1,5 @@
 add_library(minitel_keyboard
+  key_is_pressed.c
   key_to_name.c
 )
 

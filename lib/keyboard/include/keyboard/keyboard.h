@@ -49,4 +49,17 @@
 // the code is not valid.
 const char* keyboard_key_to_name(uint8_t key);
 
+// Given a key code, return whether it is currently pressed or not. It is meant
+// to be used in only loops that only need to check a single key. Use
+// KEYBOARD_FOR_EACH_PRESSED_KEY to check multiple keys.
+#ifdef KEYBOARD_ROWS
+static inline bool keyboard_key_is_pressed(uint8_t key) {
+  uint8_t row_value = board_read_keyboard(key >> 3);
+  uint8_t col_mask = 1 << (key & 0x7);
+  return (row_value & col_mask) == 0;
+}
+#else
+bool keyboard_key_is_pressed(uint8_t key);
+#endif
+
 #endif
