@@ -42,7 +42,7 @@ where:
   * `nfz400` and `nfz400+ram` (with `board_nfz330_nfz400`) [^1]:
     * Philips Minitel 2 (NFZ 400, NMS 6202/19B and NMS 6202/19W)
     * HOBS Viewdata Banking Terminal (NMS 6302/00B)
-  * `722039m` (with `board_722039m`) [^2]:
+  * `722039m` (with `board_722039m`):
     * Telic-Alcatel Minitel 12 (722039 M)
   * There is also some limited support for custom hardware boards and/or other
     Minitels: it is possible to pass `justrom:` followed by a comma-separated

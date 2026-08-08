@@ -8,11 +8,6 @@
 #define START_VALUE 0x2b
 #define IDLE_VALUE 0x4d
 
-#define PARITY(val)                                                   \
-  !(((val >> 0) ^ (val >> 1) ^ (val >> 2) ^ (val >> 3) ^ (val >> 4) ^ \
-     (val >> 5) ^ (val >> 6) ^ (val >> 7)) &                          \
-    1)
-
 static int16_t phase = -2 * BOARD_PERIODIC_TASK_HZ;  // 2 s initial delay
 
 static uint8_t txbuf = START_VALUE;

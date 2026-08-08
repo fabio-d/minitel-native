@@ -1,6 +1,6 @@
 .program mememu_dir
 ; This program sets the direction of the AD pins, but not the value, which is
-; controlled by `mememu_out` program above. It keeps the 4 sideset pins
+; controlled by `mememu_out` program below. It keeps the 4 sideset pins
 ; configured as outputs for as long as the PSEN line is low.
 ; It is meant to be instantiated twice, with 4 out of the 8 AD pins controlled
 ; separately by each instance.
@@ -35,7 +35,7 @@ wait 1 pin 0        side 0b1111
 
 .program mememu_out
 ; This program sets the output value of the 8 AD pins, but not the direction,
-; which is controlled by `mememu_dir` program below.
+; which is controlled by `mememu_dir` program above.
 .out 8
 
 ; Run at full speed.
