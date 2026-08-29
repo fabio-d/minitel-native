@@ -9,9 +9,13 @@ This board supports the following Minitel models:
 
 * Telic-Alcatel Minitel 12 (722039 M)
 
-**Note**: the battery-powered RAM chip (U2) has not been validated yet, and it
-is not supported by the [firmware](../firmware) at the moment. It is recommended
-to leave its footprint unpopulated for now.
+**Note**: the battery[^1]-powered RAM chip is optional. If omitted (or if no
+batteries are installed), the Minitel will lose its address book and messages at
+every boot.
+
+[^1]: The Minitel 12's battery slot is located under the display (two 1.5V AA)
+and easily accessible without disassembling. See page 4 of the
+[Minitel 12 manual](https://www.minitel-alcatel.fr/documents/M12_1988/M12%20%20Mode%20d'emploi.pdf).
 
 ## Bill of materials
 
@@ -47,8 +51,7 @@ to leave its footprint unpopulated for now.
   * One 32-pin male header
     ([AliExpress](https://www.aliexpress.com/item/1005006034877497.html)), or a
     longer one cut accordingly.
-* And, optionally, for battery-powered RAM support (not tested/implemented yet -
-  leave unpopulated for now):
+* And, optionally, for battery-powered RAM support:
   * 23LCV512 SPI RAM in PDIP package
     ([datasheet](https://ww1.microchip.com/downloads/en/devicedoc/25157a.pdf)).
   * 8-pin DIP socket

@@ -1,0 +1,116 @@
+; These programs use 4 instructions per emitted bit (in normal SPI mode) or per
+; emitted pair (in "Dual Serial Mode").
+.define PUBLIC nvram_clocks_per_sck 4
+
+.program nvram_xfer8
+; This program implements normal SPI mode with transactions consistion of one or
+; more 8 bit words. It is used for the initial setup of the 23LCV512 and for
+; reading its contents. Data is transferred bidirectionally over MOSI and MISO.
+;
+; Note: outgoing data must be pushed to the FIFO *left-aligned*.
+.set 1                    ; the SET pin is CS
+.side_set 1               ; the side-set pin is SCK
+.out 1 left auto 8        ; the OUT pin is MOSI, word size is 8 bits
+.in 1 left auto 8         ; the IN pin is MISO, word size is 8 bits
+
+PUBLIC entry_point:
+.wrap_target
+; Idle state: set CS=1 and SCK=0.
+set pins, 1               side 0
+
+; Load (total number of bits to transfer - 1) into register y. This value is
+; pushed into the FIFO by start_xfer8 at the beginning of the transaction.
+; Given that we are requesting 32 bits, this will always stall and then move the
+; entire 32-bit FIFO word into y, irrespective of the autopull threshold.
+out y, 32                 side 0
+
+; Wait for a command from the CPU (stalling) and then emit its first output bit.
+out pins, 1               side 0
+
+; Set CS=0 to start the SPI transaction.
+set pins, 0               side 0
+
+; Enter the loop that will transfer the remaining bits.
+mov x, y                  side 0
+jmp loop1                 side 0
+
+; Send and receive (y+1) bits. Note: y is set externally.
+loop0:
+out pins, 1               side 0 [1]
+loop1:
+in pins, 1                side 1
+jmp x-- loop0             side 1
+
+; Go back into the idle state.
+.wrap
+
+.program nvram_dual32
+; This program implements "Dual Serial Mode" (output only). This mode is similar
+; to normal SPI mode except that it transfers two bits per cycle (both the MOSI
+; and MISO lines are driven by the MCU and read by the 23LCV512). Unlike
+; nvram_xfer8, this program fixes the transaction size to 32 bits (i.e. 16 SCK
+; cycles).
+.set 1                    ; the SET pin is CS
+.side_set 1               ; the side-set pin is SCK
+.out 2 left auto 32       ; the OUT pins are MOSI+MISO, word size is 32 bits
+
+PUBLIC entry_point:
+.wrap_target
+; Idle state: set CS=1 and SCK=0.
+set pins, 1               side 0
+
+; Wait for a command from the CPU (stalling) and then emit its first output
+; pair of bits.
+out pins, 2               side 0
+
+; Set CS=0 to start the SPI transaction.
+set pins, 0               side 0
+
+; Enter the loop that will transfer the remaining bits.
+set x, 15                 side 0
+jmp loop1                 side 0
+
+; Send and receive 16 pairs of bits.
+loop0:
+out pins, 2               side 0 [1]
+loop1:
+nop                       side 1
+jmp x-- loop0             side 1
+
+; Go back into the idle state.
+.wrap
+
+.program nvram_rstio
+; This program takes the 23LCV512 out of dual serial mode back into single mode.
+;
+; Note: MISO must be pulled-up while this program is running.
+.set 1                    ; the SET pin is CS
+.side_set 1               ; the side-set pin is SCK
+.out 1 left auto 8        ; the OUT pin is MOSI
+
+PUBLIC entry_point:
+; Idle state: set CS=1 and SCK=0.
+set pins, 1               side 0
+
+; Set MOSI=1: together with pulled-up MISO=1, this forms the 0b11111111 (RSTIO)
+; command.
+mov pins, ~null           side 0
+
+; Set CS=0 to start the SPI transaction.
+set pins, 0               side 0
+
+; Execute 4 SCK cycles.
+set x, 3                  side 0
+loop:
+nop                       side 0 [1]
+nop                       side 1
+jmp x-- loop              side 1
+
+; Go back into the idle state (CS=1 and SCK=0).
+set pins, 1               side 0
+
+; Signal completion and stop.
+push                      side 0
+.wrap_target
+nop                       side 0
+.wrap

@@ -21,6 +21,10 @@ class BusSpecialFunction(enum.Enum):
     PSEN = enum.auto()
     WR = enum.auto()
     RD = enum.auto()
+    NVRAM_CS = enum.auto()
+    NVRAM_SCK = enum.auto()
+    NVRAM_MOSI = enum.auto()
+    NVRAM_MISO = enum.auto()
 
 
 class BusLine:
@@ -81,6 +85,7 @@ parser.add_argument("output_path", type=Path)
 parser.add_argument("--with-bus-switch", action="store_true")
 parser.add_argument("--parking-mechanism", choices=("NOP", "RST"))
 parser.add_argument("--with-ram-controls", action="store_true")
+parser.add_argument("--with-nvram", action="store_true")
 
 args = parser.parse_args()
 
@@ -102,6 +107,11 @@ if args.with_bus_switch:
 if args.with_ram_controls:
     busname_to_busid["WR"] = BusSpecialFunction.WR
     busname_to_busid["RD"] = BusSpecialFunction.RD
+if args.with_nvram:
+    busname_to_busid["NVRAM_CS"] = BusSpecialFunction.NVRAM_CS
+    busname_to_busid["NVRAM_SCK"] = BusSpecialFunction.NVRAM_SCK
+    busname_to_busid["NVRAM_MOSI"] = BusSpecialFunction.NVRAM_MOSI
+    busname_to_busid["NVRAM_MISO"] = BusSpecialFunction.NVRAM_MISO
 for n in [0, 1, 2, 3, 4, 5, 6, 7]:
     busname_to_busid[f"AD{n}"] = n
 for n in [8, 9, 10, 11, 12, 13, 14, 15]:

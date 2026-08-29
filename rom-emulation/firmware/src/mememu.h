@@ -23,4 +23,8 @@ void mememu_write_rom(uint16_t address, uint8_t value);
 // Sets one byte of the emulated RAM.
 void mememu_write_ram(uint16_t address, uint8_t value);
 
+// Sets one byte of the emulated RAM, skipping the pin map translation.
+void mememu_write_ram_raw(uint16_t address_pin_values,
+                          uint8_t value_pin_values);
+
 #endif

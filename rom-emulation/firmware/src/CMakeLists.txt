@@ -14,6 +14,15 @@ else()
   set(MEMEMU_VARIANT without-ram)
 endif()
 
+if(ROM_EMULATOR_HAS_NVRAM)
+  target_sources(rom-emulator PRIVATE
+    nvram.cpp
+  )
+  pico_generate_pio_header(rom-emulator
+    ${CMAKE_CURRENT_SOURCE_DIR}/nvram.pio
+  )
+endif()
+
 pico_generate_pio_header(rom-emulator
   ${CMAKE_CURRENT_SOURCE_DIR}/mememu-common.pio
   ${CMAKE_CURRENT_SOURCE_DIR}/mememu-${MEMEMU_VARIANT}.pio
@@ -33,6 +42,7 @@ target_compile_definitions(rom-emulator PRIVATE
   "-DROM_EMULATOR_HAS_NOPEN=${ROM_EMULATOR_HAS_NOPEN}"
   "-DROM_EMULATOR_HAS_RST=${ROM_EMULATOR_HAS_RST}"
   "-DROM_EMULATOR_PROVIDES_RAM=${ROM_EMULATOR_PROVIDES_RAM}"
+  "-DROM_EMULATOR_HAS_NVRAM=${ROM_EMULATOR_HAS_NVRAM}"
 )
 
 target_include_directories(rom-emulator PRIVATE
@@ -64,6 +74,7 @@ add_custom_command(
     $<${ROM_EMULATOR_HAS_NOPEN}:--parking-mechanism=NOP>
     $<${ROM_EMULATOR_HAS_RST}:--parking-mechanism=RST>
     $<${ROM_EMULATOR_PROVIDES_RAM}:--with-ram-controls>
+    $<${ROM_EMULATOR_HAS_NVRAM}:--with-nvram>
   DEPENDS ../scripts/generate-pin-map.py
 )
 add_custom_target(pin-map

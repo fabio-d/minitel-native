@@ -24,6 +24,10 @@
 #include "pin-map.h"
 #include "trace.h"
 
+#if ROM_EMULATOR_HAS_NVRAM == 1
+#include "nvram.h"
+#endif
+
 bi_decl(bi_program_feature(MINITEL_MODEL_FEATURE));
 
 #if ROM_EMULATOR_IS_INTERACTIVE == 0
@@ -406,6 +410,11 @@ int main() {
   gpio_set_dir(PIN_RST, GPIO_OUT);
 #endif
 
+#if ROM_EMULATOR_HAS_NVRAM == 1
+  // Initialize the 23LCV512 chip and the SPI bus it is connected to.
+  nvram_setup();
+#endif
+
   // Give core 1 (that will write into the emulated RAM) and DMA reads (that
   // will serve the emulated ROM and RAM) priority access, so that they are
   // never stalled.
@@ -437,6 +446,17 @@ int main() {
                                     : MAGIC_IO_DESIRED_STATE_PARTITION_ERROR);
   in_menu = true;
   can_accept_boot_command = partition_ok;
+#endif
+
+#if ROM_EMULATOR_HAS_NVRAM == 1
+  // Restore contents of the emulated RAM from NVRAM.
+  nvram_read_burst(0, MAX_MEM_SIZE, [](uint16_t addr, uint8_t data) {
+    mememu_write_ram_raw(addr, data);
+  });
+
+  // Enter fast write mode, which is necessary for mememu to feed the NVRAM with
+  // updates in real time.
+  nvram_enter_write_fast_mode();
 #endif
 
   mememu_start();

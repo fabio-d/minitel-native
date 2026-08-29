@@ -17,6 +17,10 @@
 #include "mememu-without-ram.pio.h"
 #endif
 
+#if ROM_EMULATOR_HAS_NVRAM == 1
+#include "nvram.h"
+#endif
+
 static constexpr uint32_t PIN_ADDR_AD_MASK =
     (1 << PIN_AD0) | (1 << PIN_AD1) | (1 << PIN_AD2) | (1 << PIN_AD3) |
     (1 << PIN_AD4) | (1 << PIN_AD5) | (1 << PIN_AD6) | (1 << PIN_AD7);
@@ -93,12 +97,17 @@ static void __scratch_x("core1_worker_task") core1_worker_task() {
     auto storage = (std::atomic<uint8_t>*)dma_hw->ch[dma_data].al1_read_addr;
 
     // Write the new RAM value into the mem array.
-    *storage = value >> PIN_AD_BASE;
+    uint8_t data = value >> PIN_AD_BASE;
+    *storage = data;
 
     // Wait for WR to go high.
     do {
       value = gpio_get_all();
     } while ((value & (1 << PIN_WR)) == 0);
+
+#if ROM_EMULATOR_HAS_NVRAM == 1
+    nvram_write_fast((storage - mem) / 2, data);
+#endif
 #else
     __wfe();
 #endif
@@ -306,6 +315,12 @@ void mememu_write_ram(uint16_t address, uint8_t value) {
   uint16_t address_pin_values = pin_map_address(address);
   uint8_t value_pin_values = pin_map_data(value);
 
+  // Atomically update the mem array.
+  mem[2 * address_pin_values + 0].store(value_pin_values);
+}
+
+void mememu_write_ram_raw(uint16_t address_pin_values,
+                          uint8_t value_pin_values) {
   // Atomically update the mem array.
   mem[2 * address_pin_values + 0].store(value_pin_values);
 }
