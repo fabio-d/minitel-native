@@ -13,7 +13,9 @@ towards the obstacles. The player only has one control: making the dino jump. If
 the dino does not jump in time and ends up touching any of the obstacles, it's
 game over!
 
-## Video and screenshots
+## Online demo, video and screenshots
+
+Online demo: [https://jyaif.itch.io/dino](https://jyaif.itch.io/dino)
 
 YouTube Video:
 [https://www.youtube.com/watch?v=h29Anf6Bfy0](https://www.youtube.com/watch?v=h29Anf6Bfy0)
